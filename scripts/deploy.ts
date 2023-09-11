@@ -12,7 +12,7 @@ async function main() {
   
   // deploying launchpad
   const launchpad = await deployAndVerify(
-    'VeLaunchpad',
+    'Launchpad',
     [veImpl.address, rewardDistributorImpl.address]
   )
 
