@@ -12,7 +12,7 @@ export async function deployAndVerify(contractName: string, args: any[]) {
 
   const networkName = network.name;
   console.log("Network:", networkName);
-  if (networkName != "hardhat" && !['VeLaunchpad', 'VotingEscrow'].includes(contractName)) {
+  if (networkName != "hardhat" && !['Launchpad', 'VotingEscrow'].includes(contractName)) {
       console.log("Verifying contract...");
       try {
         await new Promise(resolve => {
