@@ -108,6 +108,31 @@ describe("Launchpad", function () {
 
   });
 
+  describe('With initialized implementations', function () {
+    before(async() => {
+      await votingEscrowImpl.initialize(
+        bptToken.address,
+        'initName',
+        'initSymbol',
+        user1Address
+      );
+
+      const startTime = (await time.latest()) + 99999999999;
+      await rewardDistributorImpl.initialize(
+        votingEscrowImpl.address,
+        startTime
+      );
+    });
+
+    it('Should return values of VE implementation', async () => {
+      expect(await votingEscrowImpl.name()).to.equal('initName');
+    });
+
+    it('Should return values of RD implementation', async () => {
+      expect(await rewardDistributorImpl.getVotingEscrow())
+        .to.equal(votingEscrowImpl.address);
+    });
+  });
 
   describe('Deploy Launchpad constraints', function () {
     it('Should be unable to deploy launchpad with zero VE address', async () => {
@@ -201,26 +226,28 @@ describe("Launchpad", function () {
   });
 
   describe('Deploy VE system', function () {
-    let name = 'MockName1';
-    let symbol = 'MockSymbol1';
+    let veName = 'MockName1';
+    let veSymbol = 'MockSymbol1';
     let txResult: ContractTransaction;
     let txReceipt: ContractReceipt;
 
     let votingEscrow: VotingEscrow;
     let rewardDistributor: RewardDistributor;
 
+    let rewardStartTime: number;
+
     before(async () => {
-      const rewardStartTime = (await time.latest()) + 10000000;
+      rewardStartTime = (await time.latest()) + 10000000;
       txResult = await launchpad.connect(creator).deploy(
         bptToken.address,
-        name,
-        symbol,
+        veName,
+        veSymbol,
         rewardStartTime
       );
       txReceipt = await txResult.wait();
     });
 
-    it("Should emit event on deployment", async () => {
+    it('Should emit event on deployment', async () => {
       // @ts-ignore
       const event = txReceipt.events[0];
       // @ts-ignore
@@ -233,6 +260,89 @@ describe("Launchpad", function () {
       // @ts-ignore
       expect(event.args.rewardDistributor)
         .to.not.equal(constants.AddressZero);
+    });
+
+    describe('Deployed system test', function () {
+      before(async() => {
+        // @ts-ignore
+        const votingEscrowAdr = txReceipt.events[0].args.votingEscrow;
+        // @ts-ignore
+        const rewardDistributorAdr = txReceipt.events[0].args.rewardDistributor;
+
+        votingEscrow = await ethers.getContractAt(
+          'VotingEscrow',
+          votingEscrowAdr
+        );
+        rewardDistributor = await ethers.getContractAt(
+          'RewardDistributor',
+          rewardDistributorAdr
+        );
+      })
+
+      it('Should return correct initial states for VotingEscrow', async () => {
+        expect(await votingEscrow.name()).to.equal(veName);
+        expect(await votingEscrow.symbol()).to.equal(veSymbol);
+
+        expect(await votingEscrow.decimals())
+          .to.equal(await bptToken.decimals());
+
+        expect(await votingEscrow.token())
+          .to.equal(bptToken.address);
+      });
+
+      it('Should return non-zero initial point_history', async () => {
+        const firstPH = await votingEscrow.point_history(0);
+        expect(firstPH.blk).to.be.gt(3);
+        expect(firstPH.ts).to.be.gt(1000);
+      });
+
+      it('Should return correct admin of the VotingEscrow', async () => {
+        expect(await votingEscrow.admin()).to.equal(creatorAddress);
+      });
+
+      it(`Shouldn't allow to initialize VotingEscrow again`, async () => {
+        await expect(votingEscrow.initialize(
+          bptToken.address,
+          'newNameFail',
+          'newSymbolFail',
+          creatorAddress
+        ))
+          .to.be.revertedWith('only once');
+      });
+
+      it('Should return correct of the VotingEscrow for the rewardDistributor', async () => {
+        expect(await rewardDistributor.getVotingEscrow())
+          .to.equal(votingEscrow.address);
+      });
+
+      it('Should return non-zero timeCursor of the VotingEscrow', async () => {
+        expect(await rewardDistributor.getTimeCursor())
+          .to.be.gt(await time.latest());
+      });
+
+      it(`Shouldn't allow to initialize RewardDistributor again`, async () => {
+        const newTime = (await time.latest()) + 10000001
+        await expect(rewardDistributor.initialize(
+          bptToken.address,
+          newTime
+        ))
+          .to.be.revertedWith('only once');
+      });
+
+      it('Should be able to deposit rewards into rewardDistributor', async () => {        
+        await time.increaseTo(rewardStartTime + 2000); // to allow deposit
+
+        const depositAmount = utils.parseEther('1000');
+
+        await rewardToken.connect(creator)
+          .approve(rewardDistributor.address, depositAmount);
+
+        await rewardDistributor.connect(creator)
+          .depositToken(rewardToken.address, depositAmount);
+
+        expect(await rewardToken.balanceOf(rewardDistributor.address))
+          .to.equal(depositAmount);
+      })
     });
   });
 
