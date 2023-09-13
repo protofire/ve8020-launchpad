@@ -10,9 +10,6 @@ rewardDistributor: public(address)
 admin: public(address)
 
 
-interface tokenInterface:
-    def getOwner() -> address: view
-
 interface IVotingEscrow:
     def initialize(
         token: address,
@@ -37,7 +34,7 @@ def __init__(
     _votingEscrow: address, _rewardDistributor: address
 ):
     assert (
-        _votingEscrow != empty(address) or
+        _votingEscrow != empty(address) and
         _rewardDistributor != empty(address)
     ), "zero address"
 
