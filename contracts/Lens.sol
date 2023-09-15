@@ -13,9 +13,9 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 pragma solidity ^0.7.0;
+pragma experimental ABIEncoderV2;
 
-
-import {IRewardDistributor} from "./IRewardDistributor.sol";
+import {IRewardDistributor} from "./interfaces/IRewardDistributor.sol";
 import "@balancer-labs/v2-solidity-utils/contracts/openzeppelin/SafeERC20.sol";
 
 /**
@@ -23,16 +23,39 @@ import "@balancer-labs/v2-solidity-utils/contracts/openzeppelin/SafeERC20.sol";
  */
 
 contract LensReward {
-   
+
+    struct ClaimableRewards {
+        address token;
+        uint256 claimableAmount;
+    }
+
     function getUserClaimableReward(
         IRewardDistributor distributor,
         address user,
         IERC20 token
-    ) external returns (uint256) {
+    ) public returns (ClaimableRewards memory) {
         uint256 balanceBefore = token.balanceOf(user);
         distributor.claimToken(user, token);
         uint256 balanceAfter = token.balanceOf(user);
 
-        return balanceAfter - balanceBefore;
+        return ClaimableRewards({
+            token: address(token),
+            claimableAmount: balanceAfter - balanceBefore
+        });
+    }
+
+    function getUserClaimableRewardsAll(
+        IRewardDistributor distributor,
+        address user,
+        IERC20[] calldata tokens
+    ) external returns (ClaimableRewards[] memory) {
+        uint256 len = tokens.length;
+        ClaimableRewards[] memory res = new ClaimableRewards[](len);
+
+        for (uint256 i = 0; i < len; ++i) {
+            res[i] = getUserClaimableReward(distributor, user, tokens[i]);
+        }
+
+        return res;
     }
 }

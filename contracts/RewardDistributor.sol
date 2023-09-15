@@ -16,8 +16,8 @@ pragma solidity ^0.7.0;
 pragma experimental ABIEncoderV2;
 
 
-import {IVotingEscrow} from "./IVotingEscrow.sol";
-import {IRewardDistributor} from "./IRewardDistributor.sol";
+import {IVotingEscrow} from "./interfaces/IVotingEscrow.sol";
+import {IRewardDistributor} from "./interfaces/IRewardDistributor.sol";
 import "@balancer-labs/v2-solidity-utils/contracts/openzeppelin/ReentrancyGuard.sol";
 import "@balancer-labs/v2-solidity-utils/contracts/helpers/OptionalOnlyCaller.sol";
 import "@balancer-labs/v2-solidity-utils/contracts/helpers/InputHelpers.sol";
