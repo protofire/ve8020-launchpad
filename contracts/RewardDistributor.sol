@@ -776,6 +776,7 @@ contract RewardDistributor is
             require(!allowedRewardTokens[tokens[i]], "already exist");
             allowedRewardTokens[tokens[i]] = true;
             _rewardTokens.push(tokens[i]);
+            emit TokenAdded(tokens[i]);
         }
     }
 
