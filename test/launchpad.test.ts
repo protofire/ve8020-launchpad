@@ -114,13 +114,14 @@ describe("Launchpad", function () {
         bptToken.address,
         'initName',
         'initSymbol',
-        user1Address
+        user2Address
       );
 
       const startTime = (await time.latest()) + 99999999999;
       await rewardDistributorImpl.initialize(
         votingEscrowImpl.address,
-        startTime
+        startTime,
+        user2Address
       );
     });
 
@@ -324,12 +325,13 @@ describe("Launchpad", function () {
         const newTime = (await time.latest()) + 10000001
         await expect(rewardDistributor.initialize(
           bptToken.address,
-          newTime
+          newTime,
+          creatorAddress
         ))
           .to.be.revertedWith('only once');
       });
 
-      it('Should be able to deposit rewards into rewardDistributor', async () => {        
+      it('Should NOT be able to deposit rewards into rewardDistributor', async () => {
         await time.increaseTo(rewardStartTime + 2000); // to allow deposit
 
         const depositAmount = utils.parseEther('1000');
@@ -337,13 +339,79 @@ describe("Launchpad", function () {
         await rewardToken.connect(creator)
           .approve(rewardDistributor.address, depositAmount);
 
-        await rewardDistributor.connect(creator)
-          .depositToken(rewardToken.address, depositAmount);
+        await expect(
+          rewardDistributor.connect(creator)
+            .depositToken(rewardToken.address, depositAmount)
+          ).to.be.revertedWith('token not allowed');
 
-        expect(await rewardToken.balanceOf(rewardDistributor.address))
-          .to.equal(depositAmount);
-      })
+      });
+
+      describe('Adding reward tokens', function () {
+        before(async() => {
+          const depositAmount = utils.parseEther('1000');
+
+          await rewardToken.connect(creator)
+            .approve(rewardDistributor.address, depositAmount);
+
+          await rewardDistributor.connect(creator)
+            .addAllowedRewardTokens([rewardToken.address]);
+        });
+
+        it('Should be able to deposit rewards into rewardDistributor', async () => {
+  
+          const depositAmount = utils.parseEther('1000');
+  
+          await rewardToken.connect(creator)
+            .approve(rewardDistributor.address, depositAmount);
+  
+          await rewardDistributor.connect(creator)
+            .depositToken(rewardToken.address, depositAmount);
+  
+          expect(await rewardToken.balanceOf(rewardDistributor.address))
+            .to.equal(depositAmount);
+        })
+      });
+
+      describe('Fails with adding reward tokens', function () {
+        it('Should NOT be able to add new reward token by non-admin', async () => {
+
+          await expect(
+            rewardDistributor.connect(user1)
+              .addAllowedRewardTokens([bptToken.address])
+            ).to.be.revertedWith('not admin');
+        });
+
+        it('Should NOT be able to add same reward token', async () => {
+
+          await expect(rewardDistributor.connect(creator)
+            .addAllowedRewardTokens([rewardToken.address])
+          ).to.be.revertedWith('already exist');
+  
+        });
+      });
+
+      describe('RewardDistributor admin functionality', function () {
+        it('Should NOT transfer admin to zero address', async () => {
+
+          await expect(rewardDistributor.connect(creator)
+            .transferAdmin(constants.AddressZero)
+          ).to.be.revertedWith('zero address');
+        });
+
+        it('Should NOT transfer admin to new address if caller is not admin', async () => {
+
+          await expect(rewardDistributor.connect(user1)
+            .transferAdmin(user2Address)
+          ).to.be.revertedWith('not admin');
+        });
+
+        it('Should transfer admin rights to new user', async () => {
+          await rewardDistributor.connect(creator)
+            .transferAdmin(user2Address);
+
+          expect(await rewardDistributor.admin()).to.equal(user2Address);
+        });
+      });
     });
   });
-
 });

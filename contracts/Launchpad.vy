@@ -19,7 +19,7 @@ interface IVotingEscrow:
     ): nonpayable
 
 interface IRewardDistributor:
-    def initialize(veAddress: address, startTime: uint256): nonpayable
+    def initialize(veAddress: address, startTime: uint256, admin: address): nonpayable
 
 
 event NewVESystem:
@@ -62,7 +62,8 @@ def deploy(
     newRewardDistributor: address = create_minimal_proxy_to(self.rewardDistributor)
     IRewardDistributor(newRewardDistributor).initialize(
         newVotingEscrow,
-        rewardDistributorStartTime
+        rewardDistributorStartTime,
+        msg.sender
     )
 
     log NewVESystem(

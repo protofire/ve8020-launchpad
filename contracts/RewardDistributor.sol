@@ -51,6 +51,11 @@ contract RewardDistributor is
     uint256 private _timeCursor;
     mapping(uint256 => uint256) private _veSupplyCache;
 
+    address public admin;
+    address[] private _rewardTokens;
+    mapping(address => bool) public allowedRewardTokens;
+
+
     // Token State
 
     // `startTime` and `timeCursor` are both timestamps so comfortably fit in a uint64.
@@ -83,12 +88,21 @@ contract RewardDistributor is
 
     constructor() EIP712("RewardDistributor", "1") {}
 
+    modifier onlyAdmin() {
+        require(admin == msg.sender, "not admin");
+        _;
+    }
+
     function initialize(
         IVotingEscrow votingEscrow,
-        uint256 startTime
+        uint256 startTime,
+        address admin_
     ) external {
-        require(!isInitialized, 'only once');
+        require(!isInitialized, "only once");
         isInitialized = true;
+
+        require (admin_ != address(0), "zero address");
+        admin = admin_;
         
         _votingEscrow = votingEscrow;
 
@@ -222,6 +236,7 @@ contract RewardDistributor is
         IERC20 token,
         uint256 amount
     ) external override nonReentrant {
+        require(allowedRewardTokens[address(token)], "token not allowed");
         _checkpointToken(token, false);
         token.safeTransferFrom(msg.sender, address(this), amount);
         _checkpointToken(token, true);
@@ -242,6 +257,7 @@ contract RewardDistributor is
 
         uint256 length = tokens.length;
         for (uint256 i = 0; i < length; ++i) {
+            require(allowedRewardTokens[address(tokens[i])], "token not allowed");
             _checkpointToken(tokens[i], false);
             tokens[i].safeTransferFrom(msg.sender, address(this), amounts[i]);
             _checkpointToken(tokens[i], true);
@@ -754,4 +770,23 @@ contract RewardDistributor is
         // Overflows are impossible here for all realistic inputs.
         return _roundDownTimestamp(timestamp + 1 weeks - 1);
     }
+
+    function addAllowedRewardTokens(address[] calldata tokens) external onlyAdmin {
+        for (uint256 i = 0; i < tokens.length; i++) {
+            require(!allowedRewardTokens[tokens[i]], "already exist");
+            allowedRewardTokens[tokens[i]] = true;
+            _rewardTokens.push(tokens[i]);
+            emit TokenAdded(tokens[i]);
+        }
+    }
+
+    function getAllowedRewardTokens() external view returns (address[] memory) {
+        return _rewardTokens;
+    }
+
+    function transferAdmin(address newAdmin) external onlyAdmin {
+        require (newAdmin != address(0), "zero address");
+        admin = newAdmin;
+    }
+
 }
