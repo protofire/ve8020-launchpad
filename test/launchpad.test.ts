@@ -110,11 +110,13 @@ describe("Launchpad", function () {
 
   describe('With initialized implementations', function () {
     before(async() => {
+      let maxLockTime: number = 60 * 60 * 24 * 7; // week
       await votingEscrowImpl.initialize(
         bptToken.address,
         'initName',
         'initSymbol',
-        user2Address
+        user2Address,
+        maxLockTime
       );
 
       const startTime = (await time.latest()) + 99999999999;
@@ -189,9 +191,9 @@ describe("Launchpad", function () {
   });
 
   describe('Deploy VE system constraints', function () {
-    let name = 'MockName1';
-    let symbol = 'MockSymbol1';
-    
+    let name: string = 'MockName1';
+    let symbol: string = 'MockSymbol1';
+    let maxLockTime: number = 60 * 60 * 24 * 7; // week
     it('Should fail to create VE-System with incorrect token', async () => {
       const rewardStartTime = (await time.latest()) + 10000000;
 
@@ -199,6 +201,7 @@ describe("Launchpad", function () {
         rewardDistributorImpl.address,
         name,
         symbol,
+        maxLockTime,
         rewardStartTime
         )).to.be.reverted;
     });
@@ -210,6 +213,7 @@ describe("Launchpad", function () {
         bptToken.address,
         name,
         symbol,
+        maxLockTime,
         rewardStartTime
         )).to.be.revertedWith('Cannot start before current week');
     });
@@ -221,8 +225,21 @@ describe("Launchpad", function () {
         bptToken.address,
         name,
         symbol,
+        maxLockTime,
         rewardStartTime
         )).to.be.revertedWith('Zero total supply results in lost tokens');
+    });
+
+    it('Should fail to create VE-System with low maxLockTime)', async () => {
+      let rewardStartTime = (await time.latest()) + 100000000;
+      
+      await expect(launchpad.deploy(
+        bptToken.address,
+        name,
+        symbol,
+        maxLockTime - 1,
+        rewardStartTime
+        )).to.be.revertedWith('too short max lock period');
     });
   });
 
@@ -236,6 +253,7 @@ describe("Launchpad", function () {
     let rewardDistributor: RewardDistributor;
 
     let rewardStartTime: number;
+    let maxLockTime: number = 60 * 60 * 24 * 365; // year
 
     before(async () => {
       rewardStartTime = (await time.latest()) + 10000000;
@@ -243,6 +261,7 @@ describe("Launchpad", function () {
         bptToken.address,
         veName,
         veSymbol,
+        maxLockTime,
         rewardStartTime
       );
       txReceipt = await txResult.wait();
@@ -301,12 +320,17 @@ describe("Launchpad", function () {
         expect(await votingEscrow.admin()).to.equal(creatorAddress);
       });
 
+      it('Should return correct MAXTIME of the lock of the VotingEscrow', async () => {
+        expect(await votingEscrow.MAXTIME()).to.equal(maxLockTime);
+      });
+
       it(`Shouldn't allow to initialize VotingEscrow again`, async () => {
         await expect(votingEscrow.initialize(
           bptToken.address,
           'newNameFail',
           'newSymbolFail',
-          creatorAddress
+          creatorAddress,
+          maxLockTime
         ))
           .to.be.revertedWith('only once');
       });
