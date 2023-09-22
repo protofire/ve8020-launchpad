@@ -15,11 +15,16 @@ interface IVotingEscrow:
         token: address,
         name: String[64],
         symbol: String[32],
-        admin: address
+        admin: address,
+        maxLockTime: uint256
     ): nonpayable
 
 interface IRewardDistributor:
-    def initialize(veAddress: address, startTime: uint256, admin: address): nonpayable
+    def initialize(
+        veAddress: address,
+        startTime: uint256,
+        admin: address
+    ): nonpayable
 
 
 event NewVESystem:
@@ -48,6 +53,7 @@ def deploy(
     tokenBptAddr: address,
     name: String[64],
     symbol: String[32],
+    maxLockTime: uint256,
     rewardDistributorStartTime: uint256,
 ) -> (address, address):
 
@@ -56,7 +62,8 @@ def deploy(
         tokenBptAddr,
         name,
         symbol,
-        msg.sender
+        msg.sender,
+        maxLockTime
     )
 
     newRewardDistributor: address = create_minimal_proxy_to(self.rewardDistributor)
