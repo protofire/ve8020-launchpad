@@ -27,7 +27,7 @@ interface IRewardDistributor:
     ): nonpayable
 
 
-event NewVESystem:
+event VESystemCreated:
     token: indexed(address)
     votingEscrow: address
     rewardDistributor: address
@@ -56,7 +56,14 @@ def deploy(
     maxLockTime: uint256,
     rewardDistributorStartTime: uint256,
 ) -> (address, address):
-
+    """
+    @notice Deploys new VotingEscrow and RewardDistributor contracts
+    @param tokenBptAddr The address of the token to be used for locking
+    @param name The name for the new VotingEscrow contract
+    @param symbol The symbol for the new VotingEscrow contract
+    @param maxLockTime A constraint for the maximum lock time in the new VotingEscrow contract
+    @param rewardDistributorStartTime The start time for reward distribution
+    """
     newVotingEscrow: address = create_minimal_proxy_to(self.votingEscrow)
     IVotingEscrow(newVotingEscrow).initialize(
         tokenBptAddr,
@@ -73,7 +80,7 @@ def deploy(
         msg.sender
     )
 
-    log NewVESystem(
+    log VESystemCreated(
         tokenBptAddr,
         newVotingEscrow,
         newRewardDistributor,

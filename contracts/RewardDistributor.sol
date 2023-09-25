@@ -771,6 +771,10 @@ contract RewardDistributor is
         return _roundDownTimestamp(timestamp + 1 weeks - 1);
     }
 
+    /**
+     * @notice Adds allowed tokens for the distribution.
+     * @param tokens - An array of ERC20 token addresses to be added for the further reward distribution.
+     */
     function addAllowedRewardTokens(address[] calldata tokens) external onlyAdmin {
         for (uint256 i = 0; i < tokens.length; i++) {
             require(!allowedRewardTokens[tokens[i]], "already exist");
@@ -780,10 +784,18 @@ contract RewardDistributor is
         }
     }
 
+    /**
+     * @notice Returns allowed for reward distribution tokens list.
+     * @return An array of ERC20 token addresses which can be used as rewards.
+     */
     function getAllowedRewardTokens() external view returns (address[] memory) {
         return _rewardTokens;
     }
 
+    /**
+     * @notice Transfers admin rights to new address.
+     * @param newAdmin - The new admin address to set.
+     */
     function transferAdmin(address newAdmin) external onlyAdmin {
         require (newAdmin != address(0), "zero address");
         admin = newAdmin;
