@@ -1,5 +1,10 @@
 # ve8020 Launchpad
 
+[Launchpad](./docs/1_Launchpad.md)  
+[VotingEscrow](./docs/2_VotingEscrow.md)  
+[RewardDistributor](./docs/3_RewardDistributor.md)  
+
+
 ## Install
 Clone repo and run:  
 
