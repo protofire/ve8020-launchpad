@@ -1,5 +1,10 @@
 # ve8020 Launchpad
 
+[Launchpad](./docs/1_Launchpad.md)  
+[VotingEscrow](./docs/2_VotingEscrow.md)  
+[RewardDistributor](./docs/3_RewardDistributor.md)  
+
+
 ## Install
 Clone repo and run:  
 
@@ -14,3 +19,11 @@ To deploy VotingEscrow, RewardDistributor implementations and **Launchpad** cont
 npx hardhat run ./scripts/deploy.ts --network networkName
 ```
 Check list of available networks in the *hardhat.config.ts* file.
+
+
+## Testing
+To run tests:  
+```
+npx hardhat test  
+```
+

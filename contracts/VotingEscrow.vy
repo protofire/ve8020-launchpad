@@ -7,7 +7,7 @@
 @notice Votes have a weight depending on time, so that users are
         committed to the future of (whatever they are voting for)
 @dev Vote weight decays linearly over time. Lock time cannot be
-     more than `MAXTIME` (1 year).
+     more than `MAXTIME` (set by creator).
 """
 
 # Voting escrow to have time-weighted votes
@@ -21,7 +21,7 @@
 #   |  /
 #   |/
 # 0 +--------+------> time
-#       maxtime (1 year?)
+#       maxtime
 
 struct Point:
     bias: int128
@@ -83,12 +83,10 @@ event Supply:
 
 
 WEEK: constant(uint256) = 7 * 86400  # all future times are rounded by week
-MAXTIME: constant(uint256) = 365 * 86400  # 1 year
+MAXTIME: public(uint256)
 MULTIPLIER: constant(uint256) = 10**18
 
 TOKEN: address
-# From Balancer's implementation:
-# AUTHORIZER_ADAPTOR: immutable(address) # Authorizer Adaptor
 
 NAME: String[64]
 SYMBOL: String[32]
@@ -114,30 +112,41 @@ future_admin: public(address)
 is_initialized: public(bool)
 
 @external
-def initialize(token_addr: address, _name: String[64], _symbol: String[32], admin_addr: address):
+def initialize(
+    _token_addr: address,
+    _name: String[64],
+    _symbol: String[32],
+    _admin_addr: address,
+    _max_time: uint256
+):
     """
     @notice Contract constructor
-    @param token_addr 80/20 Token-WETH BPT token address
+    @param _token_addr 80/20 Token-WETH BPT token address
     @param _name Token name
     @param _symbol Token symbol
+    @param _admin_addr Contract admin address
+    @param _max_time Locking max time
     """
 
     assert(not self.is_initialized), 'only once'
     self.is_initialized = True
 
-    assert(admin_addr != empty(address)), 'empty admin'
+    assert(_admin_addr != empty(address)), 'empty admin'
 
-    self.TOKEN = token_addr
-    self.admin = admin_addr
+    self.TOKEN = _token_addr
+    self.admin = _admin_addr
     self.point_history[0].blk = block.number
     self.point_history[0].ts = block.timestamp
 
-    _decimals: uint256 = ERC20(token_addr).decimals()  # also validates token
+    _decimals: uint256 = ERC20(_token_addr).decimals()  # also validates token for non-zero
     assert _decimals <= 255
 
     self.NAME = _name
     self.SYMBOL = _symbol
     self.DECIMALS = _decimals
+
+    assert(_max_time >= WEEK), 'too short max lock period'
+    self.MAXTIME = _max_time
 
 
 @external
@@ -268,10 +277,10 @@ def _checkpoint(addr: address, old_locked: LockedBalance, new_locked: LockedBala
         # Calculate slopes and biases
         # Kept at zero when they have to
         if old_locked.end > block.timestamp and old_locked.amount > 0:
-            u_old.slope = old_locked.amount / convert(MAXTIME, int128)
+            u_old.slope = old_locked.amount / convert(self.MAXTIME, int128)
             u_old.bias = u_old.slope * convert(old_locked.end - block.timestamp, int128)
         if new_locked.end > block.timestamp and new_locked.amount > 0:
-            u_new.slope = new_locked.amount / convert(MAXTIME, int128)
+            u_new.slope = new_locked.amount / convert(self.MAXTIME, int128)
             u_new.bias = u_new.slope * convert(new_locked.end - block.timestamp, int128)
 
 
@@ -443,7 +452,7 @@ def create_lock(_value: uint256, _unlock_time: uint256):
     assert _value > 0  # dev: need non-zero value
     assert _locked.amount == 0, "Withdraw old tokens first"
     assert (unlock_time > block.timestamp), "Can only lock until time in the future"
-    assert (unlock_time <= block.timestamp + MAXTIME), "Voting lock can be 1 year max"
+    assert (unlock_time <= block.timestamp + self.MAXTIME), "Voting lock can be 1 year max"
 
     self._deposit_for(msg.sender, _value, unlock_time, _locked, CREATE_LOCK_TYPE)
 
@@ -480,7 +489,7 @@ def increase_unlock_time(_unlock_time: uint256):
     assert _locked.end > block.timestamp, "Lock expired"
     assert _locked.amount > 0, "Nothing is locked"
     assert unlock_time > _locked.end, "Can only increase lock duration"
-    assert (unlock_time <= block.timestamp + MAXTIME), "Voting lock can be 1 year max"
+    assert (unlock_time <= block.timestamp + self.MAXTIME), "Voting lock can be 1 year max"
 
     self._deposit_for(msg.sender, 0, unlock_time, _locked, INCREASE_UNLOCK_TIME)
 

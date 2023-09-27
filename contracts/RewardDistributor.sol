@@ -16,8 +16,8 @@ pragma solidity ^0.7.0;
 pragma experimental ABIEncoderV2;
 
 
-import {IVotingEscrow} from "./IVotingEscrow.sol";
-import {IRewardDistributor} from "./IRewardDistributor.sol";
+import {IVotingEscrow} from "./interfaces/IVotingEscrow.sol";
+import {IRewardDistributor} from "./interfaces/IRewardDistributor.sol";
 import "@balancer-labs/v2-solidity-utils/contracts/openzeppelin/ReentrancyGuard.sol";
 import "@balancer-labs/v2-solidity-utils/contracts/helpers/OptionalOnlyCaller.sol";
 import "@balancer-labs/v2-solidity-utils/contracts/helpers/InputHelpers.sol";
@@ -51,6 +51,11 @@ contract RewardDistributor is
     uint256 private _timeCursor;
     mapping(uint256 => uint256) private _veSupplyCache;
 
+    address public admin;
+    address[] private _rewardTokens;
+    mapping(address => bool) public allowedRewardTokens;
+
+
     // Token State
 
     // `startTime` and `timeCursor` are both timestamps so comfortably fit in a uint64.
@@ -83,12 +88,21 @@ contract RewardDistributor is
 
     constructor() EIP712("RewardDistributor", "1") {}
 
+    modifier onlyAdmin() {
+        require(admin == msg.sender, "not admin");
+        _;
+    }
+
     function initialize(
         IVotingEscrow votingEscrow,
-        uint256 startTime
+        uint256 startTime,
+        address admin_
     ) external {
-        require(!isInitialized, 'only once');
+        require(!isInitialized, "only once");
         isInitialized = true;
+
+        require (admin_ != address(0), "zero address");
+        admin = admin_;
         
         _votingEscrow = votingEscrow;
 
@@ -222,6 +236,7 @@ contract RewardDistributor is
         IERC20 token,
         uint256 amount
     ) external override nonReentrant {
+        require(allowedRewardTokens[address(token)], "token not allowed");
         _checkpointToken(token, false);
         token.safeTransferFrom(msg.sender, address(this), amount);
         _checkpointToken(token, true);
@@ -242,6 +257,7 @@ contract RewardDistributor is
 
         uint256 length = tokens.length;
         for (uint256 i = 0; i < length; ++i) {
+            require(allowedRewardTokens[address(tokens[i])], "token not allowed");
             _checkpointToken(tokens[i], false);
             tokens[i].safeTransferFrom(msg.sender, address(this), amounts[i]);
             _checkpointToken(tokens[i], true);
@@ -754,4 +770,35 @@ contract RewardDistributor is
         // Overflows are impossible here for all realistic inputs.
         return _roundDownTimestamp(timestamp + 1 weeks - 1);
     }
+
+    /**
+     * @notice Adds allowed tokens for the distribution.
+     * @param tokens - An array of ERC20 token addresses to be added for the further reward distribution.
+     */
+    function addAllowedRewardTokens(address[] calldata tokens) external onlyAdmin {
+        for (uint256 i = 0; i < tokens.length; i++) {
+            require(!allowedRewardTokens[tokens[i]], "already exist");
+            allowedRewardTokens[tokens[i]] = true;
+            _rewardTokens.push(tokens[i]);
+            emit TokenAdded(tokens[i]);
+        }
+    }
+
+    /**
+     * @notice Returns allowed for reward distribution tokens list.
+     * @return An array of ERC20 token addresses which can be used as rewards.
+     */
+    function getAllowedRewardTokens() external view returns (address[] memory) {
+        return _rewardTokens;
+    }
+
+    /**
+     * @notice Transfers admin rights to new address.
+     * @param newAdmin - The new admin address to set.
+     */
+    function transferAdmin(address newAdmin) external onlyAdmin {
+        require (newAdmin != address(0), "zero address");
+        admin = newAdmin;
+    }
+
 }

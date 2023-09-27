@@ -38,6 +38,7 @@ interface IRewardDistributor {
         uint256 amount,
         uint256 userTokenTimeCursor
     );
+    event TokenAdded(address indexed token);
 
     /**
      * @notice Returns the VotingEscrow (veBPT) token contract
