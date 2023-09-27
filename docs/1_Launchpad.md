@@ -15,7 +15,7 @@ The Launchpad contract uses the minimal-proxy pattern for deploying new VotingEs
 
 
 ### Code  
-Launchpad.vy (https://github.com/protofire/ve8020-launchpad)
+[Launchpad.vy](../contracts/Launchpad.vy)
 
 #### deploy
 ```
@@ -28,8 +28,8 @@ function deploy(
 ) external returns (address, address);
 ```
 
-The function creates a new pair of VotingEscrow and RewardsDistribution contracts and emits an event with such new addresses. **The caller will be the admin of these new contracts.**
-Parameters:
+The function creates a new pair of VotingEscrow and RewardsDistribution contracts and emits an event with such new addresses. **The caller will be the admin of these new contracts.**  
+Parameters:  
 `tokenBptAddr` - the address of the token to be used for locking in the VotingEscrow contract.  
 `name` - the name for the new VotingEscrow contract. It can be any name chosen by the creator.  
 `symbol` - the symbol for the new VotingEscrow contract. It can be any symbol chosen by the creator.  

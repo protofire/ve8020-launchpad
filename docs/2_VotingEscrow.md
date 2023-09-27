@@ -2,7 +2,7 @@
 The contract allows locking tokens for a selected period of time and receiving rewards from the RewardsDistribution contract in return. It utilizes the VotingEscrow contract from Curve as its implementation.
 
 ### Code  
-VotingEscrow.vy (https://github.com/protofire/ve8020-launchpad)
+[VotingEscrow.vy](../contracts/VotingEscrow.vy)
 
 
 ### View functions

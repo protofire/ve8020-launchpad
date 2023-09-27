@@ -2,7 +2,7 @@
 Distributes any tokens transferred to the contract among VotingEscrow holders proportionally based on a snapshot of the week at which the tokens are sent to the RewardDistributor contract.
 
 ### Code  
-RewardDistributor.sol (https://github.com/protofire/ve8020-launchpad)
+[RewardDistributor.sol](../contracts/RewardDistributor.sol)
 
 
 ### View functions
@@ -60,7 +60,7 @@ function claimTokens(
   address[] calldata token
 ) external returns(uint256[] memory);
 ```
-Claims a number of tokens on behalf of a user.   
+Claims a number of tokens on behalf of a user.  
 Parameters:  
 `user` - The user on behalf of which to claim  
 `tokens` - An array of ERC20 token addresses to be claimed..  
@@ -75,7 +75,7 @@ An array of the amounts of each token in `tokens` sent to `user` as a result of 
 function addAllowedRewardTokens(address[] calldata tokens) external;
 ```  
 Adds allowed tokens for the distribution.  
-Parameters:
+Parameters:  
 `tokens` - An array of ERC20 token addresses to be added for the further reward distribution.
 
 #### transferAdmin
