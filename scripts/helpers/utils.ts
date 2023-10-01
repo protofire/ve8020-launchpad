@@ -12,12 +12,14 @@ export async function deployAndVerify(contractName: string, args: any[]) {
 
   const networkName = network.name;
   console.log("Network:", networkName);
-  if (networkName != "hardhat" && !['Launchpad', 'VotingEscrow'].includes(contractName)) {
-      console.log("Verifying contract...");
+  // if (networkName != "hardhat" && !['Launchpad', 'VotingEscrow'].includes(contractName)) {
+  if (networkName != "hardhat") {
+
+    console.log("Verifying contract...");
       try {
-        await new Promise(resolve => {
-          console.log('Waiting for 50 seconds until chain is ready for verifying')
-          setTimeout(resolve, 50000);
+        await new Promise((resolve) => {
+          console.log('Waiting for 12 seconds until chain is ready for verifying')
+          setTimeout(resolve, 12000);
         });
         await run("verify:verify", {
               address: contract.address,

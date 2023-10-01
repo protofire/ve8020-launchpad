@@ -6,12 +6,12 @@ async function main() {
   const [owner] = await ethers.getSigners();
   console.log('deployer address:', owner.address);
 
-  // we need only implementations for the launchpad
-  const token = await deployAndVerify('TestToken', []);
-  console.log('The mock token deployed at:', token.address);
+  console.log('Deploying SmartCheckerAllowAll contract');
 
-  const bptToken = await deployAndVerify('BPTToken', []);
-  console.log('The mock bptToken deployed at:', bptToken.address);
+  // we need only implementations for the launchpad
+  const smartAllower = await deployAndVerify('SmartCheckerAllowAll', []);
+  console.log('The SmartCheckerAllowAll deployed at:', smartAllower.address);
+
 }
 
 main().catch((error) => {

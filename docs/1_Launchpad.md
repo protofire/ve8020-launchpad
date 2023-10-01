@@ -35,3 +35,49 @@ Parameters:
 `symbol` - the symbol for the new VotingEscrow contract. It can be any symbol chosen by the creator.  
 `maxLockTime` - a constraint for the maximum lock time in the new VotingEscrow contract. It should be at least 1 week.  
 `rewardDistributorStartTime` - the start time for reward distribution in the new RewardsDistribution contract. Unix time in seconds, should be no earlier than a week from contract creation.  
+
+##### Overview  
+The deploy() function utilizes the built-in Vyper function `create_minimal_proxy_to(address)`, which deploys a copy of the contract using the [minimal-proxy pattern](https://eips.ethereum.org/EIPS/eip-1167). Upon completion, an event is emitted with the new votingEscrow and rewardDistributor contracts.
+
+
+```
+def deploy(
+    tokenBptAddr: address,
+    name: String[64],
+    symbol: String[32],
+    maxLockTime: uint256,
+    rewardDistributorStartTime: uint256,
+) -> (address, address):
+    """
+    @notice Deploys new VotingEscrow and RewardDistributor contracts
+    @param tokenBptAddr The address of the token to be used for locking
+    @param name The name for the new VotingEscrow contract
+    @param symbol The symbol for the new VotingEscrow contract
+    @param maxLockTime A constraint for the maximum lock time in the new VotingEscrow contract
+    @param rewardDistributorStartTime The start time for reward distribution
+    """
+    newVotingEscrow: address = create_minimal_proxy_to(self.votingEscrow)
+    IVotingEscrow(newVotingEscrow).initialize(
+        tokenBptAddr,
+        name,
+        symbol,
+        msg.sender,
+        maxLockTime
+    )
+
+    newRewardDistributor: address = create_minimal_proxy_to(self.rewardDistributor)
+    IRewardDistributor(newRewardDistributor).initialize(
+        newVotingEscrow,
+        rewardDistributorStartTime,
+        msg.sender
+    )
+
+    log VESystemCreated(
+        tokenBptAddr,
+        newVotingEscrow,
+        newRewardDistributor,
+        msg.sender
+    )
+
+    return (newVotingEscrow, newRewardDistributor)
+```
