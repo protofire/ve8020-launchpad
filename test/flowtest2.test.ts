@@ -61,7 +61,7 @@ let day: number = 60 * 60 * 24;
 let week: number = 60 * 60 * 24 * 7;
 
 
-describe("Launchpad flow test", function () {
+describe("Launchpad flow test 2 with multiple users", function () {
 
   before(async () => {
     [owner, creator, user1, user2, user3] = await ethers.getSigners();
@@ -101,6 +101,9 @@ describe("Launchpad flow test", function () {
     user2Amount = utils.parseEther('1000');
     await bptToken.mint(user1Address, user1Amount);
     await bptToken.mint(user2Address, user2Amount);
+
+    await bptToken.mint(user3Address, 1);
+
   });
 
   describe('Initial states', function() {
@@ -137,7 +140,7 @@ describe("Launchpad flow test", function () {
 
   describe('With initialized implementations', function () {
     before(async() => {
-      let maxLockTime: number = 60 * 60 * 24 * 7; // week
+      let maxLockTime: number = day * 7; // week
       await votingEscrowImpl.initialize(
         bptToken.address,
         'initName',
@@ -200,7 +203,7 @@ describe("Launchpad flow test", function () {
     let rewardDistributor: RewardDistributor;
 
     let rewardStartTime: number;
-    let maxLockTime: number = 60 * 60 * 24 * 30; // 30 days
+    let maxLockTime: number = day * 30; // 30 days
 
     before(async () => {
       rewardStartTime = (await time.latest()) + week;
@@ -299,11 +302,12 @@ describe("Launchpad flow test", function () {
           // approvals before deposit
           await bptToken.connect(user1).approve(votingEscrow.address, constants.MaxUint256);
           await bptToken.connect(user2).approve(votingEscrow.address, constants.MaxUint256);
+          await bptToken.connect(user3).approve(votingEscrow.address, constants.MaxUint256);
 
           // lock-deposit
           createLockTime = await time.latest();
           await votingEscrow.connect(user1).create_lock(user1Amount, createLockTime + week * 2);
-          await votingEscrow.connect(user2).create_lock(user2Amount, createLockTime + week * 2);
+          await votingEscrow.connect(user2).create_lock(user2Amount, createLockTime + week * 4);
         });
 
         it('Should return zero balance after deposit', async () => {
@@ -316,80 +320,192 @@ describe("Launchpad flow test", function () {
             .to.equal(user1Amount.add(user2Amount));
         })
 
-        it('Should return balance in Voting escrow', async () => {
-          console.log('balance0:', await votingEscrow.connect(user1)["balanceOf(address,uint256)"](user1Address, createLockTime));
-
-          // await time.increase(week);          
-          console.log('balance1s:', await votingEscrow.connect(user1)["balanceOf(address,uint256)"](user1Address, createLockTime+1));
-          console.log('balance1d:', await votingEscrow.connect(user1)["balanceOf(address,uint256)"](user1Address, createLockTime + day));
-
-
-          console.log('balance1:', await votingEscrow.connect(user1)["balanceOf(address,uint256)"](user1Address, createLockTime+week));
-          console.log('balance2:', await votingEscrow.connect(user1)["balanceOf(address,uint256)"](user1Address, createLockTime+2*week-3.8*day));
-          console.log('balance2:', await votingEscrow.connect(user1)["balanceOf(address,uint256)"](user1Address, createLockTime+2*week-4.0*day));
-
-        })
       });
 
       describe('Adding reward tokens', function () {
         let startRewardTime: number;
 
         before(async() => {
-          const depositAmount = utils.parseEther('10000');
+          const depositAmount = totalRewardAmount.div(2);
 
           await rewardToken.connect(creator)
-            .approve(rewardDistributor.address, depositAmount);
+            .approve(rewardDistributor.address, constants.MaxUint256);
 
           await rewardDistributor.connect(creator)
             .addAllowedRewardTokens([rewardToken.address]);
           
           startRewardTime = (await rewardDistributor.getTimeCursor()).toNumber();
+
           await time.increaseTo(startRewardTime);
 
           await rewardDistributor.connect(creator)
-            .depositToken(rewardToken.address, totalRewardAmount);
+            .depositToken(rewardToken.address, depositAmount);
         });
 
         it('Should be able to deposit rewards into rewardDistributor', async () => {
 
           expect(await rewardToken.balanceOf(rewardDistributor.address))
-            .to.equal(totalRewardAmount);
-        })
+            .to.equal(totalRewardAmount.div(2));
+        });
 
-        describe('Claim rewards', function () {
-          it('Should calculate rewards', async () => {
-            let rewards = await lens.callStatic.getUserClaimableReward(rewardDistributor.address, user1Address, rewardToken.address)
-            console.log('rewards:', rewards);
-            
+        describe('Check available rewards after first week past', function () {
+          before(async () => {
             await time.increase(week);
-            rewards = await lens.callStatic.getUserClaimableReward(rewardDistributor.address, user1Address, rewardToken.address)
-            console.log('rewards:', rewards);
+          });
 
-            await time.increase(week);
-            // rewards = await lens.callStatic.getUserClaimableReward(rewardDistributor.address, user1Address, rewardToken.address)
-            // console.log('rewards:', rewards);
+          it('Should calculate correct claimable amounts of reward using lens', async () => {
+
+            const user1rewards = (
+              await lens.callStatic.getUserClaimableReward(
+                rewardDistributor.address,
+                user1Address,
+                rewardToken.address
+                )
+              ).claimableAmount;
+
+            const user2rewards = (
+              await lens.callStatic.getUserClaimableReward(
+                rewardDistributor.address,
+                user2Address,
+                rewardToken.address
+                )
+              ).claimableAmount;
+
+            // add 1 due to rounding
+            expect(user1rewards.add(user2rewards)).to.equal(totalRewardAmount.div(2));
+          });
+
+          describe('Rewards claiming', function () {
+            let user1RewardBefore: BigNumber;
+            let user2RewardBefore: BigNumber;
+
+            before(async () => {
+              user1RewardBefore = await rewardToken.balanceOf(user1Address);
+              user2RewardBefore = await rewardToken.balanceOf(user2Address);
+
+              await rewardDistributor.connect(user1)
+                .claimToken(user1Address, rewardToken.address);
+              await rewardDistributor.connect(user2)
+                .claimToken(user2Address, rewardToken.address);
+            });
+
+            it('Should increase reward balance after claim', async () => {
+              const user1RewardAfter = await rewardToken.balanceOf(user1Address);
+              const user2RewardAfter = await rewardToken.balanceOf(user2Address);
+              expect(user1RewardAfter).to.be.gt(user1RewardBefore).to.be.gt(constants.Two);
+              expect(user2RewardAfter).to.be.gt(user2RewardBefore).to.be.gt(constants.Two);
+
+              expect(user1RewardAfter.add(user2RewardAfter)).to.equal(totalRewardAmount.div(2));
+            });
+          });
+
+          describe('Adding rewards for the second week', function () {
+            before(async () => {
+              const depositAmount = totalRewardAmount.div(2);
+              await rewardDistributor.connect(creator)
+              .depositToken(rewardToken.address, depositAmount);
+            });
+
+            it('Should be able to deposit rewards into rewardDistributor', async () => {
+
+              expect(await rewardToken.balanceOf(rewardDistributor.address))
+                .to.equal(totalRewardAmount.div(2));
+            });
+
+            describe('Check available rewards after second week past', function () {
+              before(async () => {
+                await time.increase(week);
+                const currentTime = await time.latest()
+
+              });
+
+              it('Should calculate correct claimable amounts of reward using Lens', async () => {
+
+                const user1rewards = (
+                  await lens.callStatic.getUserClaimableReward(
+                    rewardDistributor.address,
+                    user1Address,
+                    rewardToken.address
+                    )
+                  ).claimableAmount;
+    
+                const user2rewards = (
+                  await lens.callStatic.getUserClaimableReward(
+                    rewardDistributor.address,
+                    user2Address,
+                    rewardToken.address
+                    )
+                  ).claimableAmount
+    
+
+                expect(user1rewards.add(user2rewards)).to.equal(totalRewardAmount.div(2));
+              });
+
+              describe('Claim process after few weeks more', function () {
+                before(async () => {
+                  await time.increase(week * 4);
+
+                  await rewardDistributor.connect(user1)
+                    .claimToken(user1Address, rewardToken.address);
+                  await rewardDistributor.connect(user2)
+                    .claimToken(user2Address, rewardToken.address);
+                });
+
+                it('Should claim all reward tokens', async () => {
+                  const user1RewardBalance = await rewardToken.balanceOf(user1Address);
+                  const user2RewardBalance = await rewardToken.balanceOf(user2Address);
+                  const distributorRewardBalance = await rewardToken.balanceOf(
+                    rewardDistributor.address
+                  );
+
+                  expect(user1RewardBalance.add(user2RewardBalance)).to.equal(totalRewardAmount);
+                  expect(distributorRewardBalance).to.equal(constants.Zero);
+                });
+
+                it('Should return greater balance for user 2, because of longest locktime', async () => {
+                  const user1RewardBalance = await rewardToken.balanceOf(user1Address);
+                  const user2RewardBalance = await rewardToken.balanceOf(user2Address);
+
+                  expect(user2RewardBalance).to.be.gt(user1RewardBalance);
+                });
+              });
+
+              describe('Withdraw bpt tokens', function () {
+                let bptBalance1Before: BigNumber;
+                let bptBalance2Before: BigNumber;
+                let veBptBlanctBefore: BigNumber;
+
+                before(async () => {
+                  bptBalance1Before = await bptToken.balanceOf(user1Address);
+                  bptBalance2Before = await bptToken.balanceOf(user2Address);
+                  veBptBlanctBefore = await bptToken.balanceOf(votingEscrow.address);
+
+                  await votingEscrow.connect(user1).withdraw();
+                  await votingEscrow.connect(user2).withdraw();
+                });
+
+                it('Should decrease voting escrow bpt balance', async () => {
+                  const veBptBalanceAfter = await bptToken.balanceOf(votingEscrow.address);
+
+                  expect(veBptBalanceAfter).to.be.lt(veBptBlanctBefore);
+                  expect(veBptBalanceAfter).to.equal(constants.Zero);
+                });
+
+                it('Should return all bpt tokens to the users', async () => {
+                  const bptBalance1After = await bptToken.balanceOf(user1Address);
+                  const bptBalance2After = await bptToken.balanceOf(user2Address);
+                  expect(bptBalance1After).to.be.gt(bptBalance1Before);
+                  expect(bptBalance1After).to.equal(user1Amount);
+
+                  expect(bptBalance2After).to.be.gt(bptBalance2Before);
+                  expect(bptBalance2After).to.equal(user2Amount);
+
+                });
+              });
+            });
           });
         });
       });
-
-      xdescribe('Fails with adding reward tokens', function () {
-        it('Should NOT be able to add new reward token by non-admin', async () => {
-
-          await expect(
-            rewardDistributor.connect(user1)
-              .addAllowedRewardTokens([bptToken.address])
-            ).to.be.revertedWith('not admin');
-        });
-
-        it('Should NOT be able to add same reward token', async () => {
-
-          await expect(rewardDistributor.connect(creator)
-            .addAllowedRewardTokens([rewardToken.address])
-          ).to.be.revertedWith('already exist');
-  
-        });
-      });
-
     });
   });
 });
