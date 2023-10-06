@@ -2,9 +2,10 @@ module.exports = {
     // global constants
 
     // Private key that will be used for testnets
-    testnetAccounts: ["a000000000000000000000000000000000000000000000000000000000000000",],
+    testnetAccounts: ["a432100000000000000000000000000000000000000000000000000000000000",],
+    
     // Private key that will be used for mainnets
-    mainnetAccounts: ["b000000000000000000000000000000000000000000000000000000000000000",],
+    mainnetAccounts: ["b123400000000000000000000000000000000000000000000000000000000000",],
 
     // rpc node url
     rpcUrl: "https://myRpcNode.com",

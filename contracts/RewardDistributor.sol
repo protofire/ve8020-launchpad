@@ -407,7 +407,8 @@ contract RewardDistributor is
         for (uint256 i = 0; i < 20; ++i) {
             // We clearly cannot claim for `firstUnclaimableWeek` and so we break here.
             if (nextUserTokenWeekToClaim >= firstUnclaimableWeek) break;
-
+            if (_veSupplyCache[nextUserTokenWeekToClaim] == 0) break;
+            
             amount +=
                 (tokensPerWeek[nextUserTokenWeekToClaim] *
                     userBalanceAtTimestamp[nextUserTokenWeekToClaim]) /

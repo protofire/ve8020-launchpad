@@ -1,5 +1,5 @@
 import { ethers } from "hardhat";
-import { deployAndVerify } from "./utils/utils";
+import { deployAndVerify } from "./helpers/utils";
 
 async function main() {
 

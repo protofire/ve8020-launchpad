@@ -8,7 +8,7 @@ import {
   BigNumber,
   utils,
   constants,
-  ContractReceipt
+  ContractReceipt,
 } from "ethers";
 
 import {
@@ -17,18 +17,27 @@ import {
   VotingEscrow,
   TestToken,
   BPTToken,
+  SmartWalletWhitelist,
+  SmartCheckerAllowAll,
+  LensReward,
 } from "../typechain-types";
-
 
 let owner: Signer;
 let creator: Signer;
 let user1: Signer;
 let user2: Signer;
+let user3: Signer;
 
 let ownerAddress: string;
 let creatorAddress: string;
 let user1Address: string;
 let user2Address: string;
+let user3Address: string;
+
+let user1Amount: BigNumber;
+let user2Amount: BigNumber;
+let totalRewardAmount: BigNumber;
+
 
 let erc20Factory: ContractFactory;
 let rewardToken: TestToken;
@@ -43,15 +52,25 @@ let votingEscrowImpl: VotingEscrow;
 let launchpadFactory: ContractFactory;
 let launchpad: Launchpad;
 
-describe("Launchpad", function () {
+let lens: LensReward;
+
+let smartWalletChecker: SmartWalletWhitelist;
+let smartCheckerAllower: SmartCheckerAllowAll;
+
+let day: number = 60 * 60 * 24;
+let week: number = 60 * 60 * 24 * 7;
+
+
+describe("Launchpad flow test", function () {
 
   before(async () => {
-    [owner, creator, user1, user2] = await ethers.getSigners();
-    [ownerAddress, creatorAddress, user1Address, user2Address] = await Promise.all([
+    [owner, creator, user1, user2, user3] = await ethers.getSigners();
+    [ownerAddress, creatorAddress, user1Address, user2Address, user3Address] = await Promise.all([
       owner.getAddress(),
       creator.getAddress(),
       user1.getAddress(),
       user2.getAddress(),
+      user3.getAddress(),
     ]);
 
     erc20Factory = await ethers.getContractFactory('TestToken');
@@ -66,22 +85,30 @@ describe("Launchpad", function () {
     rdFactory = await ethers.getContractFactory('RewardDistributor');
     rewardDistributorImpl = (await rdFactory.deploy()) as RewardDistributor;
 
-    await rewardToken.mint(creatorAddress, utils.parseEther("2000"));
+    const smartCheckerFactory = await ethers.getContractFactory('SmartWalletWhitelist');
+    smartWalletChecker = (await smartCheckerFactory.deploy(creatorAddress)) as SmartWalletWhitelist;
+
+    const smartCheckerAllowerFactory = await ethers.getContractFactory('SmartCheckerAllowAll');
+    smartCheckerAllower = (await smartCheckerAllowerFactory.deploy()) as SmartCheckerAllowAll;
+
+    const lensFactory = await ethers.getContractFactory('LensReward');
+    lens = (await lensFactory.deploy()) as LensReward;
+
+    totalRewardAmount = utils.parseEther("10000")
+    await rewardToken.mint(creatorAddress, totalRewardAmount);
+    
+    user1Amount = utils.parseEther('2000');
+    user2Amount = utils.parseEther('1000');
+    await bptToken.mint(user1Address, user1Amount);
+    await bptToken.mint(user2Address, user2Amount);
   });
 
   describe('Initial states', function() {
-    it('Should deploy mock reward token', async () => {
-      const name = await rewardToken.name();
-      const symbol = await rewardToken.symbol();
-      expect(name).to.equal('Token1');
-      expect(symbol).to.equal('Symbl1');
-    });
+    it('Should mint initial token balances', async () => {
 
-    it('Should deploy mock BPT token', async () => {
-      const name = await bptToken.name();
-      const symbol = await bptToken.symbol();
-      expect(name).to.equal('BPTToken1');
-      expect(symbol).to.equal('BPT1');
+      expect(await rewardToken.balanceOf(creatorAddress)).to.equal(totalRewardAmount);
+      expect(await bptToken.balanceOf(user1Address)).to.equal(user1Amount);
+      expect(await bptToken.balanceOf(user2Address)).to.equal(user2Amount);
     });
 
     it('Should deploy empty VE implementation', async () => {
@@ -137,34 +164,6 @@ describe("Launchpad", function () {
     });
   });
 
-  describe('Deploy Launchpad constraints', function () {
-    it('Should not be unable to deploy launchpad with zero VE address', async () => {
-      launchpadFactory = await ethers.getContractFactory('Launchpad');
-
-      await expect(launchpadFactory.deploy(
-        constants.AddressZero,
-        rewardDistributorImpl.address
-        )).to.be.revertedWith('zero address');
-    });
-
-    it('Should not be unable to deploy launchpad with zero rewardDistributor address', async () => {
-      launchpadFactory = await ethers.getContractFactory('Launchpad');
-
-      await expect(launchpadFactory.deploy(
-        votingEscrowImpl.address,
-        constants.AddressZero
-        )).to.be.revertedWith('zero address');
-    });
-
-    it('Should not be unable to deploy launchpad with both zero addresses', async () => {
-      launchpadFactory = await ethers.getContractFactory('Launchpad');
-
-      await expect(launchpadFactory.deploy(
-        constants.AddressZero,
-        constants.AddressZero
-        )).to.be.revertedWith('zero address');
-    });
-  });
 
   describe('Deploy Launchpad', function () {
     before(async () => {
@@ -190,62 +189,10 @@ describe("Launchpad", function () {
     });
   });
 
-  describe('Deploy VE system constraints', function () {
-    let name: string = 'MockName1';
-    let symbol: string = 'MockSymbol1';
-    let maxLockTime: number = 60 * 60 * 24 * 7; // week
-    it('Should fail to create VE-System with incorrect token', async () => {
-      const rewardStartTime = (await time.latest()) + 10000000;
-
-      await expect(launchpad.deploy(
-        rewardDistributorImpl.address,
-        name,
-        symbol,
-        maxLockTime,
-        rewardStartTime
-        )).to.be.reverted;
-    });
-
-    it('Should fail to create VE-System with incorrect reward startTime (0)', async () => {
-      const rewardStartTime = 0;
-      
-      await expect(launchpad.deploy(
-        bptToken.address,
-        name,
-        symbol,
-        maxLockTime,
-        rewardStartTime
-        )).to.be.revertedWith('Cannot start before current week');
-    });
-
-    it('Should fail to create VE-System with incorrect reward startTime (current)', async () => {
-      let rewardStartTime = (await time.latest());
-      
-      await expect(launchpad.deploy(
-        bptToken.address,
-        name,
-        symbol,
-        maxLockTime,
-        rewardStartTime
-        )).to.be.revertedWith('Zero total supply results in lost tokens');
-    });
-
-    it('Should fail to create VE-System with low maxLockTime)', async () => {
-      let rewardStartTime = (await time.latest()) + 100000000;
-      
-      await expect(launchpad.deploy(
-        bptToken.address,
-        name,
-        symbol,
-        maxLockTime - 1,
-        rewardStartTime
-        )).to.be.revertedWith('too short max lock period');
-    });
-  });
 
   describe('Deploy VE system', function () {
-    let veName = 'MockName1';
-    let veSymbol = 'MockSymbol1';
+    let veName = 'Lock system 1';
+    let veSymbol = 'LS_1';
     let txResult: ContractTransaction;
     let txReceipt: ContractReceipt;
 
@@ -253,10 +200,11 @@ describe("Launchpad", function () {
     let rewardDistributor: RewardDistributor;
 
     let rewardStartTime: number;
-    let maxLockTime: number = 60 * 60 * 24 * 365; // year
+    let maxLockTime: number = day * 30; // 30 days
 
     before(async () => {
-      rewardStartTime = (await time.latest()) + 10000000;
+      rewardStartTime = (await time.latest()) + week;
+
       txResult = await launchpad.connect(creator).deploy(
         bptToken.address,
         veName,
@@ -345,95 +293,113 @@ describe("Launchpad", function () {
           .to.be.gt(await time.latest());
       });
 
-      it(`Shouldn't allow to initialize RewardDistributor again`, async () => {
-        const newTime = (await time.latest()) + 10000001
-        await expect(rewardDistributor.initialize(
-          bptToken.address,
-          newTime,
-          creatorAddress
-        ))
-          .to.be.revertedWith('only once');
-      });
+      describe('Users make locks (deposit)', function () {
+        let createLockTime: number;
 
-      it('Should NOT be able to deposit rewards into rewardDistributor', async () => {
-        await time.increaseTo(rewardStartTime + 2000); // to allow deposit
-
-        const depositAmount = utils.parseEther('1000');
-
-        await rewardToken.connect(creator)
-          .approve(rewardDistributor.address, depositAmount);
-
-        await expect(
-          rewardDistributor.connect(creator)
-            .depositToken(rewardToken.address, depositAmount)
-          ).to.be.revertedWith('token not allowed');
-
-      });
-
-      describe('Adding reward tokens', function () {
         before(async() => {
-          const depositAmount = utils.parseEther('1000');
+          // approvals before deposit
+          await bptToken.connect(user1).approve(votingEscrow.address, constants.MaxUint256);
+          await bptToken.connect(user2).approve(votingEscrow.address, constants.MaxUint256);
 
-          await rewardToken.connect(creator)
-            .approve(rewardDistributor.address, depositAmount);
+          // lock-deposit
+          createLockTime = await time.latest();
+          await votingEscrow.connect(user1).create_lock(user1Amount, createLockTime + week * 2);
+          await votingEscrow.connect(user2).create_lock(user2Amount, createLockTime + week * 2);
 
-          await rewardDistributor.connect(creator)
-            .addAllowedRewardTokens([rewardToken.address]);
         });
 
-        it('Should be able to deposit rewards into rewardDistributor', async () => {
-  
-          const depositAmount = utils.parseEther('1000');
-  
-          await rewardToken.connect(creator)
-            .approve(rewardDistributor.address, depositAmount);
-  
-          await rewardDistributor.connect(creator)
-            .depositToken(rewardToken.address, depositAmount);
-  
-          expect(await rewardToken.balanceOf(rewardDistributor.address))
-            .to.equal(depositAmount);
+        it('Should return zero balance after deposit', async () => {
+          expect(await bptToken.balanceOf(user1Address)).to.equal(constants.Zero);
+          expect(await bptToken.balanceOf(user2Address)).to.equal(constants.Zero);
+        });
+
+        it('Should increase votingEscrow balance', async () => {
+          expect(await bptToken.balanceOf(votingEscrow.address))
+            .to.equal(user1Amount.add(user2Amount));
         })
       });
 
-      describe('Fails with adding reward tokens', function () {
-        it('Should NOT be able to add new reward token by non-admin', async () => {
+      describe('Adding reward tokens', function () {
+        let startRewardTime: number;
 
-          await expect(
-            rewardDistributor.connect(user1)
-              .addAllowedRewardTokens([bptToken.address])
-            ).to.be.revertedWith('not admin');
-        });
+        before(async() => {
+          const depositAmount = totalRewardAmount;
 
-        it('Should NOT be able to add same reward token', async () => {
+          await rewardToken.connect(creator)
+            .approve(rewardDistributor.address, constants.MaxUint256);
 
-          await expect(rewardDistributor.connect(creator)
-            .addAllowedRewardTokens([rewardToken.address])
-          ).to.be.revertedWith('already exist');
-  
-        });
-      });
-
-      describe('RewardDistributor admin functionality', function () {
-        it('Should NOT transfer admin to zero address', async () => {
-
-          await expect(rewardDistributor.connect(creator)
-            .transferAdmin(constants.AddressZero)
-          ).to.be.revertedWith('zero address');
-        });
-
-        it('Should NOT transfer admin to new address if caller is not admin', async () => {
-
-          await expect(rewardDistributor.connect(user1)
-            .transferAdmin(user2Address)
-          ).to.be.revertedWith('not admin');
-        });
-
-        it('Should transfer admin rights to new user', async () => {
           await rewardDistributor.connect(creator)
-            .transferAdmin(user2Address);
+            .addAllowedRewardTokens([rewardToken.address]);
+          
+          startRewardTime = (await rewardDistributor.getTimeCursor()).toNumber();
+          await time.increaseTo(startRewardTime);
 
-          expect(await rewardDistributor.admin()).to.equal(user2Address);
+          await rewardDistributor.connect(creator)
+            .depositToken(rewardToken.address, totalRewardAmount);
+        });
+
+        it('Should be able to deposit rewards into rewardDistributor', async () => {
+
+          expect(await rewardToken.balanceOf(rewardDistributor.address))
+            .to.equal(totalRewardAmount);
+        })
+
+        describe('Check available rewards after first week past', function () {
+          before(async () => {
+            await time.increase(week);
+          });
+
+          it('Should calculate correct claimable amounts of reward', async () => {
+            let rewards = await lens.callStatic.getUserClaimableReward(rewardDistributor.address, user1Address, rewardToken.address)
+            
+            const user1rewards = (
+              await lens.callStatic.getUserClaimableReward(
+                rewardDistributor.address,
+                user1Address,
+                rewardToken.address
+                )
+              ).claimableAmount;
+            const user2rewards = (
+              await lens.callStatic.getUserClaimableReward(
+                rewardDistributor.address,
+                user2Address,
+                rewardToken.address
+                )
+              ).claimableAmount
+
+            // add 1 due to rounding
+            expect(user1rewards.add(user2rewards).add(constants.One)).to.equal(totalRewardAmount);
+          });
+
+          describe('Rewards claiming', function () {
+            let user1RewardBefore: BigNumber;
+            let user2RewardBefore: BigNumber;
+
+            before(async () => {
+              user1RewardBefore = await rewardToken.balanceOf(user1Address);
+              user2RewardBefore = await rewardToken.balanceOf(user2Address);
+
+              await rewardDistributor.connect(user1)
+                .claimToken(user1Address, rewardToken.address);
+              await rewardDistributor.connect(user2)
+                .claimToken(user2Address, rewardToken.address);              
+            });
+
+            it('Should increase reward balance after claim', async () => {
+              const user1RewardAfter = await rewardToken.balanceOf(user1Address);
+              const user2RewardAfter = await rewardToken.balanceOf(user2Address);
+              expect(user1RewardAfter).to.be.gt(user1RewardBefore).to.be.gt(constants.Two);
+              expect(user2RewardAfter).to.be.gt(user2RewardBefore).to.be.gt(constants.Two);
+
+              expect(user1RewardAfter.add(user2RewardAfter).add(constants.One)).to.equal(totalRewardAmount);
+            });
+
+            it('Should decrease RewardDustributor balance after claim', async () => {
+              const rdBalance = await rewardToken.balanceOf(rewardDistributor.address);
+
+              expect(rdBalance).to.be.lte(constants.One);
+            });
+          });
         });
       });
     });
