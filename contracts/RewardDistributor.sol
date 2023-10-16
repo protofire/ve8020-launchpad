@@ -240,6 +240,7 @@ contract RewardDistributor is
         _checkpointToken(token, false);
         token.safeTransferFrom(msg.sender, address(this), amount);
         _checkpointToken(token, true);
+        emit RewardDeposit(token, amount);
     }
 
     /**
@@ -261,6 +262,7 @@ contract RewardDistributor is
             _checkpointToken(tokens[i], false);
             tokens[i].safeTransferFrom(msg.sender, address(this), amounts[i]);
             _checkpointToken(tokens[i], true);
+            emit RewardDeposit(tokens[i], amounts[i]);
         }
     }
 
@@ -407,6 +409,7 @@ contract RewardDistributor is
         for (uint256 i = 0; i < 20; ++i) {
             // We clearly cannot claim for `firstUnclaimableWeek` and so we break here.
             if (nextUserTokenWeekToClaim >= firstUnclaimableWeek) break;
+            if (_veSupplyCache[nextUserTokenWeekToClaim] == 0) break;
 
             amount +=
                 (tokensPerWeek[nextUserTokenWeekToClaim] *

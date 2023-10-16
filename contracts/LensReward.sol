@@ -12,16 +12,19 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-pragma solidity ^0.7.0;
-pragma experimental ABIEncoderV2;
+pragma solidity ^0.8.18;
 
-import {IRewardDistributor} from "./interfaces/IRewardDistributor.sol";
-import "@balancer-labs/v2-solidity-utils/contracts/openzeppelin/SafeERC20.sol";
+interface IERC20 {
+    function balanceOf(address account) external view returns (uint256);
+}
+
+interface IRewardDistributor {
+    function claimToken(address user, IERC20 token) external returns (uint256);
+}
 
 /**
  * @title Lens Reward 
  */
-
 contract LensReward {
 
     struct ClaimableRewards {
