@@ -6,10 +6,10 @@ async function main() {
   const [owner] = await ethers.getSigners();
   console.log('deployer address:', owner.address);
 
-  console.log('Deploying SmartWalletWhitelist contract');
+  console.log('Deploying SmartWalletChecker contract');
 
-  const smartCheckerList = await deployAndVerify('SmartWalletWhitelist', [owner.address]);
-  console.log('The SmartWalletWhitelist deployed at:', smartCheckerList.address);
+  const smartChecker = await deployAndVerify('SmartWalletChecker', []);
+  console.log('The SmartWalletChecker deployed at:', smartChecker.address);
 
 }
 

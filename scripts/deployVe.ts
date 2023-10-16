@@ -1,12 +1,11 @@
 import { ethers } from "hardhat";
-import { deployAndVerify } from "./helpers/utils";
+import { deployAndVerify } from "./helpers/common";
 
 async function main() {
 
   const [owner] = await ethers.getSigners();
   console.log('deployer address:', owner.address);
 
-  // we need only implementations for the launchpad
   const votingEscrowImpl = await deployAndVerify('VotingEscrow', []);
 
 
