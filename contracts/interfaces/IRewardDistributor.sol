@@ -39,6 +39,7 @@ interface IRewardDistributor {
         uint256 userTokenTimeCursor
     );
     event TokenAdded(address indexed token);
+    event RewardDeposit(IERC20 token, uint256 amount);
 
     /**
      * @notice Returns the VotingEscrow (veBPT) token contract
