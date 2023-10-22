@@ -1,5 +1,6 @@
 ## RewardDistributor
-Distributes any tokens transferred to the contract among VotingEscrow holders proportionally based on a snapshot of the week at which the tokens are sent to the RewardDistributor contract.
+Distributes any tokens transferred to the contract among VotingEscrow holders proportionally based on a snapshot of the week at which the tokens are sent to the RewardDistributor contract.  
+You can manually supply rewards to the RewardDistributor contract. Alternatively, you can use third-party contracts that will regularly supply rewards to the RewardDistributor contract.
 
 ### Code  
 [RewardDistributor.sol](../contracts/RewardDistributor.sol)
