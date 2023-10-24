@@ -1,27 +1,28 @@
-## RewardDistributor
-Distributes any tokens transferred to the contract among VotingEscrow holders proportionally based on a snapshot of the week at which the tokens are sent to the RewardDistributor contract.
+# RewardDistributor
+Distributes any tokens transferred to the contract among VotingEscrow holders proportionally based on a snapshot of the week at which the tokens are sent to the RewardDistributor contract.  
+You can manually supply rewards to the RewardDistributor contract. Alternatively, you can use third-party contracts that will regularly supply rewards to the RewardDistributor contract.
 
-### Code  
+## Code  
 [RewardDistributor.sol](../contracts/RewardDistributor.sol)
 
 
-### View functions
-#### token
-```
+## View functions
+### token
+```sh
 function token() external view returns (address)
 ```
 Returns the address of the token that can be deposited into VotingEscrow.  
 
-#### name
-```
+### name
+```sh
 function name() external view returns (string memory)
 ```
 Returns name of the current VotingEscrow contract.  
 
 
-### Creating Distribution
-#### depositToken
-```
+## Creating Distribution
+### depositToken
+```sh
 function depositToken(address token, uint256 amount) external;
 ```
 Deposits tokens to be distributed in the current week.  
@@ -29,8 +30,8 @@ Parameters:
 `token` - The ERC20 token address to distribute.  
 `amount` - The amount of tokens to deposit.  
 
-#### depositTokens
-```
+### depositTokens
+```sh
 function depositToken(
   address[] calldata tokens,
   uint256[] calldata amounts
@@ -42,8 +43,8 @@ Parameters:
 `amounts` - An array of token amounts to deposit.  
 
 
-#### claimToken
-```
+### claimToken
+```sh
 function claimToken(address user, address token) external returns (uint256);
 ```
 Claims all pending distributions of the provided token for a user.  
@@ -53,8 +54,8 @@ Parameters:
 Returns:
 The amount of `token` sent to `user` as a result of claiming.  
 
-#### claimTokens
-```
+### claimTokens
+```sh
 function claimTokens(
   address user,
   address[] calldata token
@@ -68,18 +69,18 @@ Returns:
 An array of the amounts of each token in `tokens` sent to `user` as a result of claiming.  
 
 
-### Admins functions
+## Admin's functions
 
-#### addAllowedRewardTokens
-```
+### addAllowedRewardTokens
+```sh
 function addAllowedRewardTokens(address[] calldata tokens) external;
 ```  
 Adds allowed tokens for the distribution.  
 Parameters:  
 `tokens` - An array of ERC20 token addresses to be added for the further reward distribution.
 
-#### transferAdmin
-```
+### transferAdmin
+```sh
 function transferAdmin(address newAdmin) external;
 ```  
 Transfers admin rights to new address.  

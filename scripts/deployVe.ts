@@ -8,11 +8,7 @@ async function main() {
 
   const votingEscrowImpl = await deployAndVerify('VotingEscrow', []);
 
-
   console.log('The VotingEscrow Implementation deployed at:', votingEscrowImpl.address);
-  // console.log('The RewardDistributor Implementation deployed at:', rewardDistributorImpl.address);
-
-  // console.log('The Launchpad deployed at:', launchpad.address);
 }
 
 main().catch((error) => {

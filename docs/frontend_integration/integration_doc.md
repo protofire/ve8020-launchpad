@@ -123,7 +123,7 @@ Parameters:
 
 Returns an array with objects with ClaimableRewards data.  
 
-5) Rewards claiming
+5) Rewards claiming  
 [Claim one token](../3_RewardDistributor.md/#claimtoken)  
 [Claim multiple tokens](../3_RewardDistributor.md/#claimtokens)  
 
