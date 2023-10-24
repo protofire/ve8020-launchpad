@@ -38,10 +38,19 @@ Note:
   - tokens can be added to the weekly distribution no earlier than `rewardDistributorStartTime`.
   - Every Thursday at 00:00 a new week of reward distributions begins.
 
-4) The Subgraph can be used to track the history of awards added each week. 
+4) The Subgraph can be used to track the history of rewards added each week. 
 ```
-@todo
+{
+  weekRewards(where: {rewardDistributor: "<REWARD_DISTRIBUTOR_ADDRESS>"}) {
+    rewardDistributor
+    token
+    totalWeekAmount
+    weekStart
+  }
+}
 ```
+
+[Here](https://github.com/protofire/balancer_launchpad_subgraph/blob/main/docs/GraphQueries.md) you can find more subgraph examples that can useful for frontend integration
 
 
 
