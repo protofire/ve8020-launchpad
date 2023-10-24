@@ -17,8 +17,8 @@ The Launchpad contract uses the minimal-proxy pattern for deploying new VotingEs
 ### Code  
 [Launchpad.vy](../contracts/Launchpad.vy)
 
-#### deploy
-```
+### Deploying new ve-system
+```sh
 function deploy(
     address tokenBptAddr,
     string memory name,
@@ -36,11 +36,10 @@ Parameters:
 `maxLockTime` - a constraint for the maximum lock time in the new VotingEscrow contract. It should be at least 1 week.  
 `rewardDistributorStartTime` - the start time for reward distribution in the new RewardsDistribution contract. Unix time in seconds, should be no earlier than a week from contract creation.  
 
-##### Overview  
-The deploy() function utilizes the built-in Vyper function `create_minimal_proxy_to(address)`, which deploys a copy of the contract using the [minimal-proxy pattern](https://eips.ethereum.org/EIPS/eip-1167). Upon completion, an event is emitted with the new votingEscrow and rewardDistributor contracts.
+#### Contract Overview  
+The `deploy()` function utilizes the built-in Vyper function `create_minimal_proxy_to(address)`, which deploys a copy of the contract using the [minimal-proxy pattern](https://eips.ethereum.org/EIPS/eip-1167). Upon completion, an event is emitted with the new votingEscrow and rewardDistributor contracts.  
 
-
-```
+```sh
 def deploy(
     tokenBptAddr: address,
     name: String[64],

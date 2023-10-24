@@ -64,3 +64,14 @@ This error means that the token you want to deposit for reward distribution is n
 - `Zero total supply results in lost tokens`  
 This error occurs when you want to start reward distribution for the current week, but there have been no locks made in the VotingEscrow contract yet. It is recommended to postpone the start date of the reward distribution to the next week.
 
+
+### Launchpad Contract Verification 
+To verify Launchpad contract use [contract source code](../contracts/Launchpad.vy) and constructor arguments (ABI-encoded) which you will find after Launchpad deployment.
+If you missed (or have lost) constructor arguments, you can build it manually by inserting addresses of VotingEscrow and RewardDistributor implementations without '0x' into following string:  
+```
+000000000000000000000000<VotingEscrow_Impl_Address>0000000000000000000000000<RewardDistributor_Impl_Address>
+```
+For example it would look like following (do not use it in your real project):  
+000000000000000000000000692c6827ee5cd22507dd56e3817abc9327382b600000000000000000000000008e4eeecaa12a7e1e00d192ec7db00fb066100d7b
+
+

@@ -1,5 +1,6 @@
 import { ethers } from "hardhat";
 import { deployAndVerify } from "./helpers/common";
+import chalk from "chalk";
 
 async function main() {
   const [owner] = await ethers.getSigners();
@@ -31,10 +32,9 @@ async function main() {
   );
 
   console.log(
-    'Use following constructor args for verification:',
-    encodedArguments.slice(2)
+    chalk.green.bold('\n❗️ Use following Constructor Arguments (ABI-encoded) for Launchpad verification:'),
   );
-
+  console.log(encodedArguments.slice(2));
 }
 
 main().catch((error) => {

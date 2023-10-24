@@ -11,26 +11,24 @@ export async function deployAndVerify(contractName: string, args: any[]) {
   console.log("Done");
 
   const networkName = network.name;
-  console.log("Network:", networkName);
-  // if (networkName != "hardhat" && !['Launchpad', 'VotingEscrow'].includes(contractName)) {
-  if (networkName != "hardhat") {
 
-    console.log("Verifying contract...");
+  if (networkName != "hardhat" && !['Launchpad', 'VotingEscrow'].includes(contractName)) {
+    console.log(`Verifying contract ${contractName} ...`);
       try {
         await new Promise((resolve) => {
-          console.log('Waiting for 12 seconds until chain is ready for verifying')
-          setTimeout(resolve, 12000);
+          console.log('Waiting for 5 seconds until chain is ready for verifying')
+          setTimeout(resolve, 5000);
         });
         await run("verify:verify", {
               address: contract.address,
               constructorArguments: args,
           });
-          console.log("Contract is Verified");
+          console.log("Contract has been verified");
       } catch (error: any) {
           console.log("Failed in plugin", error.pluginName);
           console.log("Error name", error.name);
           console.log("Error message", error.message);
       }
-  }
+    }
   return contract;
 }
