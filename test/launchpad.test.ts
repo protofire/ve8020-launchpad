@@ -17,6 +17,7 @@ import {
   VotingEscrow,
   TestToken,
   BPTToken,
+  RewardFaucet,
 } from "../typechain-types";
 
 
@@ -40,6 +41,9 @@ let rdFactory: ContractFactory;
 let rewardDistributorImpl: RewardDistributor;
 let veFactory: ContractFactory;
 let votingEscrowImpl: VotingEscrow;
+let rewardFaucetFactory: ContractFactory;
+let rewardFaucetImpl: RewardFaucet;
+
 let launchpadFactory: ContractFactory;
 let launchpad: Launchpad;
 
@@ -65,6 +69,9 @@ describe("Launchpad", function () {
 
     rdFactory = await ethers.getContractFactory('RewardDistributor');
     rewardDistributorImpl = (await rdFactory.deploy()) as RewardDistributor;
+
+    rewardFaucetFactory = await ethers.getContractFactory('RewardFaucet');
+    rewardFaucetImpl = (await rewardFaucetFactory.deploy()) as RewardFaucet;
 
     await rewardToken.mint(creatorAddress, utils.parseEther("2000"));
   });
@@ -106,6 +113,13 @@ describe("Launchpad", function () {
       expect(isInitialized).to.equal(false);
     });
 
+    it('Should deploy empty RewardFaucet implementation', async () => {
+      const rewardDistributor = await rewardFaucetImpl.rewardDistributor();
+      const isInitialized = await rewardFaucetImpl.isInitialized();
+      expect(rewardDistributor).to.equal(constants.AddressZero);
+      expect(isInitialized).to.equal(false);
+    });
+
   });
 
   describe('With initialized implementations', function () {
@@ -122,8 +136,13 @@ describe("Launchpad", function () {
       const startTime = (await time.latest()) + 99999999999;
       await rewardDistributorImpl.initialize(
         votingEscrowImpl.address,
+        rewardFaucetImpl.address,
         startTime,
         user2Address
+      );
+
+      await rewardFaucetImpl.initialize(
+        votingEscrowImpl.address  // intentionally!
       );
     });
 
@@ -135,6 +154,11 @@ describe("Launchpad", function () {
       expect(await rewardDistributorImpl.getVotingEscrow())
         .to.equal(votingEscrowImpl.address);
     });
+
+    it('Should return values of RF implementation', async () => {
+      expect(await rewardFaucetImpl.rewardDistributor())
+        .to.equal(votingEscrowImpl.address);
+    });
   });
 
   describe('Deploy Launchpad constraints', function () {
@@ -143,7 +167,8 @@ describe("Launchpad", function () {
 
       await expect(launchpadFactory.deploy(
         constants.AddressZero,
-        rewardDistributorImpl.address
+        rewardDistributorImpl.address,
+        rewardFaucetImpl.address
         )).to.be.revertedWith('zero address');
     });
 
@@ -152,15 +177,17 @@ describe("Launchpad", function () {
 
       await expect(launchpadFactory.deploy(
         votingEscrowImpl.address,
-        constants.AddressZero
+        constants.AddressZero,
+        rewardFaucetImpl.address
         )).to.be.revertedWith('zero address');
     });
 
-    it('Should not be unable to deploy launchpad with both zero addresses', async () => {
+    it('Should not be unable to deploy launchpad with zero rewardFaucet address', async () => {
       launchpadFactory = await ethers.getContractFactory('Launchpad');
 
       await expect(launchpadFactory.deploy(
-        constants.AddressZero,
+        votingEscrowImpl.address,
+        rewardDistributorImpl.address,
         constants.AddressZero
         )).to.be.revertedWith('zero address');
     });
@@ -171,7 +198,8 @@ describe("Launchpad", function () {
       launchpadFactory = await ethers.getContractFactory('Launchpad');
       launchpad = (await launchpadFactory.deploy(
         votingEscrowImpl.address,
-        rewardDistributorImpl.address
+        rewardDistributorImpl.address,
+        rewardFaucetImpl.address
         )) as Launchpad;
     });
 
@@ -187,6 +215,11 @@ describe("Launchpad", function () {
     it('Should set correct RD implementation of launchpad', async () => {
       expect(await launchpad.rewardDistributor())
         .to.equal(rewardDistributorImpl.address);
+    });
+
+    it('Should set correct RewardFaucet implementation of launchpad', async () => {
+      expect(await launchpad.rewardFaucet())
+        .to.equal(rewardFaucetImpl.address);
     });
   });
 
@@ -251,6 +284,7 @@ describe("Launchpad", function () {
 
     let votingEscrow: VotingEscrow;
     let rewardDistributor: RewardDistributor;
+    let rewardFaucet: RewardFaucet;
 
     let rewardStartTime: number;
     let maxLockTime: number = 60 * 60 * 24 * 365; // year
@@ -280,6 +314,9 @@ describe("Launchpad", function () {
       // @ts-ignore
       expect(event.args.rewardDistributor)
         .to.not.equal(constants.AddressZero);
+            // @ts-ignore
+      expect(event.args.rewardFaucet)
+        .to.not.equal(constants.AddressZero);
     });
 
     describe('Deployed system test', function () {
@@ -288,6 +325,8 @@ describe("Launchpad", function () {
         const votingEscrowAdr = txReceipt.events[0].args.votingEscrow;
         // @ts-ignore
         const rewardDistributorAdr = txReceipt.events[0].args.rewardDistributor;
+        // @ts-ignore
+        const rewardFaucetAdr = txReceipt.events[0].args.rewardFaucet;
 
         votingEscrow = await ethers.getContractAt(
           'VotingEscrow',
@@ -297,7 +336,11 @@ describe("Launchpad", function () {
           'RewardDistributor',
           rewardDistributorAdr
         );
-      })
+        rewardFaucet = await ethers.getContractAt(
+          'RewardFaucet',
+          rewardFaucetAdr
+        );
+      });
 
       it('Should return correct initial states for VotingEscrow', async () => {
         expect(await votingEscrow.name()).to.equal(veName);
@@ -349,10 +392,11 @@ describe("Launchpad", function () {
         const newTime = (await time.latest()) + 10000001
         await expect(rewardDistributor.initialize(
           bptToken.address,
+          rewardFaucet.address,
           newTime,
           creatorAddress
         ))
-          .to.be.revertedWith('only once');
+          .to.be.revertedWith('!twice');
       });
 
       it('Should NOT be able to deposit rewards into rewardDistributor', async () => {
@@ -367,7 +411,18 @@ describe("Launchpad", function () {
           rewardDistributor.connect(creator)
             .depositToken(rewardToken.address, depositAmount)
           ).to.be.revertedWith('token not allowed');
+      });
 
+      it(`Shouldn't allow to initialize RewardFaucet again`, async () => {
+        await expect(rewardFaucet.initialize(
+          bptToken.address  // intentionally!
+        ))
+          .to.be.revertedWith('!twice');
+      });
+
+      it(`Should return correct rewardDistributor address in the RewardFaucet`, async () => {
+        expect(await rewardFaucet.rewardDistributor())
+          .to.equal(rewardDistributor.address);
       });
 
       describe('Adding reward tokens', function () {
