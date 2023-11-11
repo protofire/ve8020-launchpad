@@ -1,4 +1,4 @@
-import { time, loadFixture } from "@nomicfoundation/hardhat-network-helpers";
+import { time } from "@nomicfoundation/hardhat-network-helpers";
 import { expect } from "chai";
 import { ethers } from "hardhat";
 import {
@@ -66,7 +66,7 @@ let DAY: number = 60 * 60 * 24;
 let WEEK: number = 60 * 60 * 24 * 7;
 
 
-describe("Launchpad flow test 3 with multiple rewards", function () {
+describe("RewardFaucet tests", function () {
 
   before(async () => {
     [owner, creator, user1, user2, user3] = await ethers.getSigners();
@@ -103,7 +103,7 @@ describe("Launchpad flow test 3 with multiple rewards", function () {
     lens = (await lensFactory.deploy()) as LensReward;
 
     totalRewardAmountA = utils.parseEther("10000")
-    await rewardTokenA.mint(creatorAddress, totalRewardAmountA);
+    await rewardTokenA.mint(creatorAddress, totalRewardAmountA.add(1));
     totalRewardAmountB = utils.parseEther("50000")
     await rewardTokenB.mint(creatorAddress, totalRewardAmountB);
     
@@ -117,14 +117,6 @@ describe("Launchpad flow test 3 with multiple rewards", function () {
   });
 
   describe('Initial states', function() {
-    it('Should mint initial token balances', async () => {
-
-      expect(await rewardTokenA.balanceOf(creatorAddress)).to.equal(totalRewardAmountA);
-      expect(await rewardTokenB.balanceOf(creatorAddress)).to.equal(totalRewardAmountB);
-      expect(await bptToken.balanceOf(user1Address)).to.equal(user1Amount);
-      expect(await bptToken.balanceOf(user2Address)).to.equal(user2Amount);
-    });
-
     it('Should deploy empty VE implementation', async () => {
       const name = await votingEscrowImpl.name();
       const symbol = await votingEscrowImpl.symbol();
@@ -203,20 +195,26 @@ describe("Launchpad flow test 3 with multiple rewards", function () {
       expect(await launchpad.rewardDistributor())
         .to.equal(rewardDistributorImpl.address);
     });
+
+    it('Should set correct RewardFaucet implementation of launchpad', async () => {
+      expect(await launchpad.rewardFaucet())
+        .to.equal(rewardFaucetImpl.address);
+    });
   });
 
 
   describe('Deploy VE system', function () {
-    let veName = 'Lock system 1';
-    let veSymbol = 'LS_1';
+    let veName = 'Lock system 4';
+    let veSymbol = 'LS_4';
     let txResult: ContractTransaction;
     let txReceipt: ContractReceipt;
 
     let votingEscrow: VotingEscrow;
     let rewardDistributor: RewardDistributor;
+    let rewardFaucet: RewardFaucet;
 
     let rewardStartTime: number;
-    let maxLockTime: number = DAY * 60; // 60 days
+    let maxLockTime: number = WEEK * 16; // ~4 months
 
     before(async () => {
       rewardStartTime = (await time.latest()) + WEEK;
@@ -243,6 +241,9 @@ describe("Launchpad flow test 3 with multiple rewards", function () {
       // @ts-ignore
       expect(event.args.rewardDistributor)
         .to.not.equal(constants.AddressZero);
+      // @ts-ignore
+      expect(event.args.rewardFaucet)
+        .to.not.equal(constants.AddressZero);
     });
 
     describe('Deployed system test', function () {
@@ -251,6 +252,8 @@ describe("Launchpad flow test 3 with multiple rewards", function () {
         const votingEscrowAdr = txReceipt.events[0].args.votingEscrow;
         // @ts-ignore
         const rewardDistributorAdr = txReceipt.events[0].args.rewardDistributor;
+        // @ts-ignore
+        const rewardFaucetAdr = txReceipt.events[0].args.rewardFaucet;
 
         votingEscrow = await ethers.getContractAt(
           'VotingEscrow',
@@ -259,6 +262,10 @@ describe("Launchpad flow test 3 with multiple rewards", function () {
         rewardDistributor = await ethers.getContractAt(
           'RewardDistributor',
           rewardDistributorAdr
+        );
+        rewardFaucet = await ethers.getContractAt(
+          'RewardFaucet',
+          rewardFaucetAdr
         );
       })
 
@@ -287,16 +294,6 @@ describe("Launchpad flow test 3 with multiple rewards", function () {
         expect(await votingEscrow.MAXTIME()).to.equal(maxLockTime);
       });
 
-      it(`Shouldn't allow to initialize VotingEscrow again`, async () => {
-        await expect(votingEscrow.initialize(
-          bptToken.address,
-          'newNameFail',
-          'newSymbolFail',
-          creatorAddress,
-          maxLockTime
-        ))
-          .to.be.revertedWith('only once');
-      });
 
       it('Should return correct of the VotingEscrow for the rewardDistributor', async () => {
         expect(await rewardDistributor.getVotingEscrow())
@@ -308,19 +305,29 @@ describe("Launchpad flow test 3 with multiple rewards", function () {
           .to.be.gt(await time.latest());
       });
 
+      it('Should return correct rewardFaucet of the RewardDistributor', async () => {
+        expect(await rewardDistributor.rewardFaucet())
+          .to.equal(rewardFaucet.address);
+      });
+
+      it('Should return correct rewardDistributor of the RewardFaucet', async () => {
+        expect(await rewardFaucet.rewardDistributor())
+          .to.equal(rewardDistributor.address);
+      });
+
       describe('Users make locks', function () {
         let createLockTime: number;
 
         before(async() => {
-          // approvals before deposit
+          // approvals before locks
           await bptToken.connect(user1).approve(votingEscrow.address, constants.MaxUint256);
           await bptToken.connect(user2).approve(votingEscrow.address, constants.MaxUint256);
           await bptToken.connect(user3).approve(votingEscrow.address, constants.MaxUint256);
 
           // lock-deposit
           createLockTime = await time.latest();
-          await votingEscrow.connect(user1).create_lock(user1Amount, createLockTime + WEEK * 3);
-          await votingEscrow.connect(user2).create_lock(user2Amount, createLockTime + WEEK * 6);
+          await votingEscrow.connect(user1).create_lock(user1Amount, createLockTime + WEEK * 4);
+          await votingEscrow.connect(user2).create_lock(user2Amount, createLockTime + WEEK * 12);
         });
 
         it('Should return zero balance after deposit', async () => {
@@ -335,26 +342,28 @@ describe("Launchpad flow test 3 with multiple rewards", function () {
 
       });
 
-      describe('Adding reward token A', function () {
+      describe('Adding rewards into RewardFaucet', function () {
         let startRewardTime: number;
+        let depositAmountA: BigNumber;
 
         before(async() => {
-          const depositAmountA = totalRewardAmountA.div(2);
+          depositAmountA = totalRewardAmountA.div(2); // 10000 / 2
 
+          // approvals
           await rewardTokenA.connect(creator)
-            .approve(rewardDistributor.address, constants.MaxUint256);
+            .approve(rewardFaucet.address, constants.MaxUint256);
           await rewardTokenB.connect(creator)
-            .approve(rewardDistributor.address, constants.MaxUint256);
+            .approve(rewardFaucet.address, constants.MaxUint256);
 
+          // add available reward tokens
           await rewardDistributor.connect(creator)
             .addAllowedRewardTokens([rewardTokenA.address, rewardTokenB.address]);
           
           startRewardTime = (await rewardDistributor.getTimeCursor()).toNumber();
-
           await time.increaseTo(startRewardTime);
 
-          await rewardDistributor.connect(creator)
-            .depositToken(rewardTokenA.address, depositAmountA);
+          await rewardFaucet.connect(creator)
+            .depositEqualWeeksPeriod(rewardTokenA.address, depositAmountA, 5);
         });
 
         it('Should add allowed tokens to the rewardDistributor', async () => {
@@ -364,15 +373,71 @@ describe("Launchpad flow test 3 with multiple rewards", function () {
           expect(allowedTokens[1]).to.equal(rewardTokenB.address);
         });
 
-        it('Should be able to deposit rewards into rewardDistributor', async () => {
+        it('Should increase rewards in the rewardFaucet', async () => {
+          expect(await rewardTokenA.balanceOf(rewardFaucet.address))
+            .to.equal(depositAmountA.mul(4).div(5));
 
-          expect(await rewardTokenA.balanceOf(rewardDistributor.address))
-            .to.equal(totalRewardAmountA.div(2));
+          expect(await rewardFaucet.totalTokenRewards(rewardTokenA.address))
+            .to.equal(depositAmountA.mul(4).div(5));
+        });
+
+        it('Should return rewards for upcoming next 6 weeks', async () => {
+          const rewards = await rewardFaucet.getUpcomingRewardsForNWeeks(rewardTokenA.address, 6);
+          expect(rewards[0]).to.equal(constants.Zero); // already distributed
+          expect(rewards[1]).to.equal(depositAmountA.div(5));
+          expect(rewards[2]).to.equal(depositAmountA.div(5));
+          expect(rewards[3]).to.equal(depositAmountA.div(5));
+          expect(rewards[4]).to.equal(depositAmountA.div(5));
+          expect(rewards[5]).to.equal(constants.Zero); // distribution was only for 6th week is empty
+        });
+
+        it('Should distribute rewards evenly over 5 weeks', async () => {
+          const currTime = await time.latest();
+          expect(await rewardFaucet.getTokenWeekAmounts(rewardTokenA.address, currTime))
+            .to.equal(constants.Zero);
+          expect(await rewardFaucet.getTokenWeekAmounts(rewardTokenA.address, currTime + WEEK))
+            .to.equal(depositAmountA.div(5));
+          expect(await rewardFaucet.getTokenWeekAmounts(rewardTokenA.address, currTime + WEEK * 2))
+            .to.equal(depositAmountA.div(5));
+          expect(await rewardFaucet.getTokenWeekAmounts(rewardTokenA.address, currTime + WEEK * 3))
+            .to.equal(depositAmountA.div(5));
+          expect(await rewardFaucet.getTokenWeekAmounts(rewardTokenA.address, currTime + WEEK * 4))
+            .to.equal(depositAmountA.div(5));
+
+          // sixth is zero
+          expect(await rewardFaucet.getTokenWeekAmounts(rewardTokenA.address, currTime + WEEK * 5))
+            .to.equal(constants.Zero);
+        });
+
+        describe('Adding same rewards for same period with 1 leftovers', function () {
+          before(async() => {
+            await rewardFaucet.connect(creator)
+              .depositEqualWeeksPeriod(rewardTokenA.address, depositAmountA.add(1), 5);
+          });
+  
+          it('Should increase rewards in the rewardFaucet', async () => {
+            expect(await rewardTokenA.balanceOf(rewardFaucet.address))
+              .to.equal(totalRewardAmountA.mul(4).div(5).add(1)); // leftovers
+  
+            expect(await rewardFaucet.totalTokenRewards(rewardTokenA.address))
+              .to.equal(totalRewardAmountA.mul(4).div(5).add(1)); // leftovers
+            });
+  
+          it('Should return rewards for upcoming next 6 weeks', async () => {
+            const rewards = await rewardFaucet.getUpcomingRewardsForNWeeks(rewardTokenA.address, 6);
+            expect(rewards[0]).to.equal(constants.Zero); // already distributed
+            expect(rewards[1]).to.equal(totalRewardAmountA.div(5));
+            expect(rewards[2]).to.equal(totalRewardAmountA.div(5));
+            expect(rewards[3]).to.equal(totalRewardAmountA.div(5));
+            expect(rewards[4]).to.equal(totalRewardAmountA.div(5).add(1)); // leftovers
+            expect(rewards[5]).to.equal(constants.Zero); // distribution was only for 6th week is empty
+          });
+
         });
 
         describe('Claim rewards-A after first WEEK past', function () {
           before(async () => {
-            await time.increase(WEEK);
+            await time.increase(WEEK * 1);
           });
 
           it('Should calculate correct claimable amounts of reward using lens', async () => {
@@ -393,12 +458,15 @@ describe("Launchpad flow test 3 with multiple rewards", function () {
                 )
               );
 
+            // console.log('user1rewards:', user1rewards);
+            // console.log('user2rewards:', user2rewards);
+
             // add 1 due to rounding
             expect(
               user1rewards[0].claimableAmount
                 .add(user2rewards[0].claimableAmount)
                 .add(constants.One)
-            ).to.equal(totalRewardAmountA.div(2));
+            ).to.equal(totalRewardAmountA.div(5));
 
             // rewardB
             expect(user1rewards[1].claimableAmount).to.equal(constants.Zero);
@@ -425,149 +493,136 @@ describe("Launchpad flow test 3 with multiple rewards", function () {
                 .claimToken(user2Address, rewardTokenA.address);
             });
 
-            it('Should increase reward balance after claim', async () => {
+            it(`Should increase user's reward balance after claim`, async () => {
+              // console.log('balance2', await rewardTokenA.balanceOf(rewardDistributor.address))
+              // console.log('balance2', await rewardTokenA.balanceOf(rewardFaucet.address))
+
               const user1RewardAfter = await rewardTokenA.balanceOf(user1Address);
               const user2RewardAfter = await rewardTokenA.balanceOf(user2Address);
               expect(user1RewardAfter).to.be.gt(user1RewardBefore).to.be.gt(constants.Two);
               expect(user2RewardAfter).to.be.gt(user2RewardBefore).to.be.gt(constants.Two);
 
               expect(
-                user1RewardAfter.add(user2RewardAfter).add(constants.One)
-              ).to.equal(totalRewardAmountA.div(2));
+                user1RewardAfter.add(user2RewardAfter).add(constants.One)  // rounding
+              ).to.equal(totalRewardAmountA.div(5));
             });
           });
 
-          describe('Adding rewards A and B for the second WEEK', function () {
+          describe('Adding 1/2 rewards B into Exact week with direct transfer', function () {
             before(async () => {
-              const depositAmountA = totalRewardAmountA.div(2);
-              await rewardDistributor.connect(creator)
-                .depositToken(rewardTokenA.address, depositAmountA);
-              
-              await rewardDistributor.connect(creator)
-                .depositToken(rewardTokenB.address, totalRewardAmountB);
+              const currentTime = (await time.latest()) + 60;
+              await rewardTokenB.connect(creator)
+                .transfer(rewardFaucet.address, totalRewardAmountB.div(4))
+              await rewardFaucet.connect(creator)
+                .depositExactWeek(rewardTokenB.address, totalRewardAmountB.div(4), currentTime);
             });
 
-            it('Should be able to deposit rewards into rewardDistributor', async () => {
-
-              expect(await rewardTokenA.balanceOf(rewardDistributor.address))
-                .to.equal(totalRewardAmountA.div(2).add(constants.One));
-
+            it('Should increase balance of the rewardDistributor', async () => {
               expect(await rewardTokenB.balanceOf(rewardDistributor.address))
-                .to.equal(totalRewardAmountB);
+                .to.equal(totalRewardAmountB.div(2));
             });
 
-            describe('Check available rewards after second WEEK past', function () {
+            it('Should not increase balance of the rewardFaucet because all rewards were transferred directly', async () => {
+              expect(await rewardTokenB.balanceOf(rewardFaucet.address))
+                .to.equal(constants.Zero);
+              
+              expect(await rewardFaucet.totalTokenRewards(rewardTokenB.address))
+                .to.equal(constants.Zero);
+            });
+          });
+
+          describe('Adding rest of rewards B into Exact week', function () {
+            let laterWeek: number;
+            let rewardDistributorBalance: BigNumber;
+            before(async () => {
+              rewardDistributorBalance = await rewardTokenB.balanceOf(rewardDistributor.address); 
+
+              laterWeek = (await time.latest()) + WEEK * 2 + 60;
+              await rewardFaucet.connect(creator)
+                .depositExactWeek(rewardTokenB.address, totalRewardAmountB.div(2), laterWeek);
+            });
+
+            it('Should return balance of the rewardDistributor without changes', async () => {
+              expect(await rewardTokenB.balanceOf(rewardDistributor.address))
+                .to.equal(rewardDistributorBalance)
+                .to.equal(totalRewardAmountB.div(2));
+            });
+
+            it('Should increase balance of the rewardFaucet', async () => {
+              expect(await rewardTokenB.balanceOf(rewardFaucet.address))
+                .to.equal(totalRewardAmountB.div(2));
+
+              expect(await rewardFaucet.totalTokenRewards(rewardTokenB.address))
+                .to.equal(totalRewardAmountB.div(2));
+            });
+
+            it('Should return correct reward amount for exact week (reward-B)', async () => {
+              expect(await rewardTokenB.balanceOf(rewardFaucet.address))
+                .to.equal(totalRewardAmountB.div(2));
+
+              expect(await rewardFaucet.getTokenWeekAmounts(rewardTokenB.address, laterWeek))
+                .to.equal(totalRewardAmountB.div(2));
+            });
+
+            describe('Claiming rewards after 2 weeks of "vacation"', function () {
+              let faucetRewardsA: BigNumber;
+              let faucetRewardsB: BigNumber;
+
+              let rdBalanceBeforeA: BigNumber;
+              let rdBalanceBeforeB: BigNumber;
+
+              let user1availableClaimA: BigNumber;
+              let user1availableClaimB: BigNumber;
+
+
               before(async () => {
-                await time.increase(WEEK * 2);
-                const currentTime = await time.latest()
+                faucetRewardsA = await rewardTokenA.balanceOf(rewardFaucet.address);
+                faucetRewardsB = await rewardTokenB.balanceOf(rewardFaucet.address);
 
-              });
-
-              it('Should calculate correct claimable amounts of reward using Lens', async () => {
-
-                const user1rewards = (
-                  await lens.callStatic.getUserClaimableRewardsAll(
-                    rewardDistributor.address,
-                    user1Address,
-                    [rewardTokenA.address, rewardTokenB.address]
-                  )
-                );
-    
-                const user2rewards = (
-                  await lens.callStatic.getUserClaimableRewardsAll(
-                    rewardDistributor.address,
-                    user2Address,
-                    [rewardTokenA.address, rewardTokenB.address]
-                  )
-                );
-
-                const totalRewardsA = user1rewards[0].claimableAmount
-                  .add(user2rewards[0].claimableAmount);
-                const totalRewardsB = user1rewards[1].claimableAmount
-                  .add(user2rewards[1].claimableAmount);
-
-                expect(totalRewardsA.add(constants.One)).to.equal(totalRewardAmountA.div(2));
-                expect(totalRewardsB.add(constants.One)).to.equal(totalRewardAmountB);
-              });
-
-              describe('Claim process after few weeks more', function () {
-                before(async () => {
-                  await time.increase(WEEK * 4);
-
+                for (let i = 3; i <= 5; i++) {
+                  await time.increase(WEEK * i);
                   await rewardDistributor.connect(user1)
                     .claimTokens(user1Address, [rewardTokenA.address, rewardTokenB.address]);
                   await rewardDistributor.connect(user2)
                     .claimTokens(user2Address, [rewardTokenA.address, rewardTokenB.address]);
-                });
+                }
 
-                it('Should claim all reward-A tokens', async () => {
-                  const user1RewardBalance = await rewardTokenA.balanceOf(user1Address);
-                  const user2RewardBalance = await rewardTokenA.balanceOf(user2Address);
-                  const distributorRewardBalance = await rewardTokenA.balanceOf(
-                    rewardDistributor.address
-                  );
-
-                  expect(
-                    user1RewardBalance.add(user2RewardBalance).add(constants.Two)
-                  ).to.be.gte(totalRewardAmountA);
-                  expect(distributorRewardBalance).to.be.lte(constants.Two);
-                });
-
-                it('Should claim all reward-B tokens', async () => {
-                  const user1RewardBalance = await rewardTokenB.balanceOf(user1Address);
-                  const user2RewardBalance = await rewardTokenB.balanceOf(user2Address);
-                  const distributorRewardBalance = await rewardTokenB.balanceOf(
-                    rewardDistributor.address
-                  );
-
-                  expect(
-                    user1RewardBalance.add(user2RewardBalance).add(constants.One)
-                  ).to.equal(totalRewardAmountB);
-                  expect(distributorRewardBalance).to.be.lte(constants.One);
-
-                });
-
-                it('Should return greater balance for user 2, because of longest locktime', async () => {
-                  const user1RewardBalance = await rewardTokenB.balanceOf(user1Address);
-                  const user2RewardBalance = await rewardTokenB.balanceOf(user2Address);
-
-                  expect(user2RewardBalance).to.be.gt(user1RewardBalance);
-                });
               });
 
-              describe('Withdraw bpt tokens when locks finished', function () {
-                let bptBalance1Before: BigNumber;
-                let bptBalance2Before: BigNumber;
-                let veBptBlanctBefore: BigNumber;
+              it('Should drain all rewards from RewardFaucet', async () => {
+                expect(await rewardTokenA.balanceOf(rewardFaucet.address))
+                  .to.equal(constants.Zero);
+                expect(await rewardTokenB.balanceOf(rewardFaucet.address))
+                  .to.equal(constants.Zero);
 
-                before(async () => {
-                  await time.increase(WEEK * 4);
+                expect(await rewardFaucet.totalTokenRewards(rewardTokenA.address))
+                  .to.equal(constants.Zero);
+                expect(await rewardFaucet.totalTokenRewards(rewardTokenB.address))
+                  .to.equal(constants.Zero);
 
-                  bptBalance1Before = await bptToken.balanceOf(user1Address);
-                  bptBalance2Before = await bptToken.balanceOf(user2Address);
-                  veBptBlanctBefore = await bptToken.balanceOf(votingEscrow.address);
+              });
 
-                  await votingEscrow.connect(user1).withdraw();
-                  await votingEscrow.connect(user2).withdraw();
-                });
+              it('Should drain all rewards from RewardDistributor', async () => {
+                expect(await rewardTokenA.balanceOf(rewardDistributor.address))
+                  .to.be.lt(constants.Zero.add(4)); // rounding
+                expect(await rewardTokenB.balanceOf(rewardDistributor.address))
+                  .to.be.lt(constants.Zero.add(4)); // rounding
+              });
 
-                it('Should decrease voting escrow bpt balance', async () => {
-                  const veBptBalanceAfter = await bptToken.balanceOf(votingEscrow.address);
+              it('Should return correct total rewards A for users', async () => {
+                const user1BalanceA = await rewardTokenA.balanceOf(user1Address);
+                const user2BalanceA = await rewardTokenA.balanceOf(user2Address)
 
-                  expect(veBptBalanceAfter).to.be.lt(veBptBlanctBefore);
-                  expect(veBptBalanceAfter).to.equal(constants.Zero);
-                });
+                expect(user1BalanceA.add(user2BalanceA))
+                  .to.be.gt(totalRewardAmountA.sub(5)); // rounding
+              });
 
-                it('Should return all bpt tokens to the users', async () => {
-                  const bptBalance1After = await bptToken.balanceOf(user1Address);
-                  const bptBalance2After = await bptToken.balanceOf(user2Address);
-                  expect(bptBalance1After).to.be.gt(bptBalance1Before);
-                  expect(bptBalance1After).to.equal(user1Amount);
+              it('Should return correct total rewards B for users', async () => {
+                const user1BalanceB = await rewardTokenB.balanceOf(user1Address);
+                const user2BalanceB = await rewardTokenB.balanceOf(user2Address)
 
-                  expect(bptBalance2After).to.be.gt(bptBalance2Before);
-                  expect(bptBalance2After).to.equal(user2Amount);
-
-                });
+                expect(user1BalanceB.add(user2BalanceB))
+                  .to.be.gt(totalRewardAmountB.sub(5)); // rounding
               });
             });
           });

@@ -2,7 +2,7 @@
 
 pragma solidity ^0.8.18;
 
-interface SmartWalletChecker {
+interface ISmartWalletChecker {
     function check(address) external view returns (bool);
 }
 
@@ -92,7 +92,7 @@ contract SmartWalletWhitelist {
             return _check;
         } else {
             if (checker != address(0)) {
-                return SmartWalletChecker(checker).check(_wallet);
+                return ISmartWalletChecker(checker).check(_wallet);
             }
         }
         return false;

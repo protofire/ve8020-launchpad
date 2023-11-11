@@ -18,8 +18,9 @@ import {
   TestToken,
   BPTToken,
   SmartWalletWhitelist,
-  SmartCheckerAllowAll,
+  SmartWalletChecker,
   LensReward,
+  RewardFaucet,
 } from "../typechain-types";
 
 let owner: Signer;
@@ -49,16 +50,19 @@ let rdFactory: ContractFactory;
 let rewardDistributorImpl: RewardDistributor;
 let veFactory: ContractFactory;
 let votingEscrowImpl: VotingEscrow;
+let rewardFaucetFactory: ContractFactory;
+let rewardFaucetImpl: RewardFaucet;
+
 let launchpadFactory: ContractFactory;
 let launchpad: Launchpad;
 
 let lens: LensReward;
 
 let smartWalletChecker: SmartWalletWhitelist;
-let smartCheckerAllower: SmartCheckerAllowAll;
+let smartCheckerAllower: SmartWalletChecker;
 
-let day: number = 60 * 60 * 24;
-let week: number = 60 * 60 * 24 * 7;
+let DAY: number = 60 * 60 * 24;
+let WEEK: number = 60 * 60 * 24 * 7;
 
 
 describe("Launchpad flow test 2 with multiple users", function () {
@@ -85,11 +89,14 @@ describe("Launchpad flow test 2 with multiple users", function () {
     rdFactory = await ethers.getContractFactory('RewardDistributor');
     rewardDistributorImpl = (await rdFactory.deploy()) as RewardDistributor;
 
+    rewardFaucetFactory = await ethers.getContractFactory('RewardFaucet');
+    rewardFaucetImpl = (await rewardFaucetFactory.deploy()) as RewardFaucet;
+
     const smartCheckerFactory = await ethers.getContractFactory('SmartWalletWhitelist');
     smartWalletChecker = (await smartCheckerFactory.deploy(creatorAddress)) as SmartWalletWhitelist;
 
-    const smartCheckerAllowerFactory = await ethers.getContractFactory('SmartCheckerAllowAll');
-    smartCheckerAllower = (await smartCheckerAllowerFactory.deploy()) as SmartCheckerAllowAll;
+    const smartCheckerAllowerFactory = await ethers.getContractFactory('SmartWalletChecker');
+    smartCheckerAllower = (await smartCheckerAllowerFactory.deploy()) as SmartWalletChecker;
 
     const lensFactory = await ethers.getContractFactory('LensReward');
     lens = (await lensFactory.deploy()) as LensReward;
@@ -140,7 +147,7 @@ describe("Launchpad flow test 2 with multiple users", function () {
 
   describe('With initialized implementations', function () {
     before(async() => {
-      let maxLockTime: number = day * 7; // week
+      let maxLockTime: number = DAY * 7; // WEEK
       await votingEscrowImpl.initialize(
         bptToken.address,
         'initName',
@@ -152,8 +159,13 @@ describe("Launchpad flow test 2 with multiple users", function () {
       const startTime = (await time.latest()) + 99999999999;
       await rewardDistributorImpl.initialize(
         votingEscrowImpl.address,
+        rewardFaucetImpl.address,
         startTime,
         user2Address
+      );
+
+      await rewardFaucetImpl.initialize(
+        rewardDistributorImpl.address
       );
     });
 
@@ -173,7 +185,8 @@ describe("Launchpad flow test 2 with multiple users", function () {
       launchpadFactory = await ethers.getContractFactory('Launchpad');
       launchpad = (await launchpadFactory.deploy(
         votingEscrowImpl.address,
-        rewardDistributorImpl.address
+        rewardDistributorImpl.address,
+        rewardFaucetImpl.address
         )) as Launchpad;
     });
 
@@ -203,10 +216,10 @@ describe("Launchpad flow test 2 with multiple users", function () {
     let rewardDistributor: RewardDistributor;
 
     let rewardStartTime: number;
-    let maxLockTime: number = day * 30; // 30 days
+    let maxLockTime: number = DAY * 30; // 30 days
 
     before(async () => {
-      rewardStartTime = (await time.latest()) + week;
+      rewardStartTime = (await time.latest()) + WEEK;
       txResult = await launchpad.connect(creator).deploy(
         bptToken.address,
         veName,
@@ -295,7 +308,7 @@ describe("Launchpad flow test 2 with multiple users", function () {
           .to.be.gt(await time.latest());
       });
 
-      describe('Users make deposit', function () {
+      describe('Users make locks', function () {
         let createLockTime: number;
 
         before(async() => {
@@ -306,8 +319,8 @@ describe("Launchpad flow test 2 with multiple users", function () {
 
           // lock-deposit
           createLockTime = await time.latest();
-          await votingEscrow.connect(user1).create_lock(user1Amount, createLockTime + week * 2);
-          await votingEscrow.connect(user2).create_lock(user2Amount, createLockTime + week * 4);
+          await votingEscrow.connect(user1).create_lock(user1Amount, createLockTime + WEEK * 2);
+          await votingEscrow.connect(user2).create_lock(user2Amount, createLockTime + WEEK * 4);
         });
 
         it('Should return zero balance after deposit', async () => {
@@ -348,9 +361,9 @@ describe("Launchpad flow test 2 with multiple users", function () {
             .to.equal(totalRewardAmount.div(2));
         });
 
-        describe('Check available rewards after first week past', function () {
+        describe('Check available rewards after first WEEK past', function () {
           before(async () => {
-            await time.increase(week);
+            await time.increase(WEEK);
           });
 
           it('Should calculate correct claimable amounts of reward using lens', async () => {
@@ -399,7 +412,7 @@ describe("Launchpad flow test 2 with multiple users", function () {
             });
           });
 
-          describe('Adding rewards for the second week', function () {
+          describe('Adding rewards for the second WEEK', function () {
             before(async () => {
               const depositAmount = totalRewardAmount.div(2);
               await rewardDistributor.connect(creator)
@@ -412,9 +425,9 @@ describe("Launchpad flow test 2 with multiple users", function () {
                 .to.equal(totalRewardAmount.div(2));
             });
 
-            describe('Check available rewards after second week past', function () {
+            describe('Check available rewards after second WEEK past', function () {
               before(async () => {
-                await time.increase(week);
+                await time.increase(WEEK);
                 const currentTime = await time.latest()
 
               });
@@ -443,7 +456,7 @@ describe("Launchpad flow test 2 with multiple users", function () {
 
               describe('Claim process after few weeks more', function () {
                 before(async () => {
-                  await time.increase(week * 4);
+                  await time.increase(WEEK * 4);
 
                   await rewardDistributor.connect(user1)
                     .claimToken(user1Address, rewardToken.address);

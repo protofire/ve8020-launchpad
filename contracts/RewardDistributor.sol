@@ -18,6 +18,7 @@ pragma experimental ABIEncoderV2;
 
 import {IVotingEscrow} from "./interfaces/IVotingEscrow.sol";
 import {IRewardDistributor} from "./interfaces/IRewardDistributor.sol";
+import {IRewardFaucet} from "./interfaces/IRewardFaucet.sol";
 import "@balancer-labs/v2-solidity-utils/contracts/openzeppelin/ReentrancyGuard.sol";
 import "@balancer-labs/v2-solidity-utils/contracts/helpers/OptionalOnlyCaller.sol";
 import "@balancer-labs/v2-solidity-utils/contracts/helpers/InputHelpers.sol";
@@ -44,6 +45,7 @@ contract RewardDistributor is
 
     bool public isInitialized;
     IVotingEscrow private _votingEscrow;
+    IRewardFaucet public rewardFaucet;
 
     uint256 private _startTime;
 
@@ -95,15 +97,16 @@ contract RewardDistributor is
 
     function initialize(
         IVotingEscrow votingEscrow,
+        IRewardFaucet rewardFaucet_,
         uint256 startTime,
         address admin_
     ) external {
-        require(!isInitialized, "only once");
+        require(!isInitialized, "!twice");
         isInitialized = true;
 
-        require (admin_ != address(0), "zero address");
+        require(admin_ != address(0) && address(rewardFaucet_) != address(0), "!zero");
         admin = admin_;
-        
+        rewardFaucet = rewardFaucet_;
         _votingEscrow = votingEscrow;
 
         startTime = _roundDownTimestamp(startTime);
@@ -244,6 +247,27 @@ contract RewardDistributor is
     }
 
     /**
+     * @notice Deposits tokens by faucet to be distributed in the current week.
+     * @dev Sending tokens directly to the RewardDistributor instead of using `depositToken` may result in tokens being
+     * retroactively distributed to past weeks, or for the distribution to carry over to future weeks.
+     *
+     * If for some reason `depositToken` cannot be called, in order to ensure that all tokens are correctly distributed
+     * manually call `checkpointToken` before and after the token transfer.
+     * @param token - The ERC20 token address to distribute.
+     * @param amount - The amount of tokens to deposit.
+     */
+    function faucetDepositToken(
+        IERC20 token,
+        uint256 amount
+    ) external {
+        require(allowedRewardTokens[address(token)], "token not allowed");
+        require(msg.sender == address(rewardFaucet), "only faucet");
+        _checkpointToken(token, false);
+        token.safeTransferFrom(msg.sender, address(this), amount);
+        _checkpointToken(token, true);
+    }
+
+    /**
      * @notice Deposits tokens to be distributed in the current week.
      * @dev A version of `depositToken` which supports depositing multiple `tokens` at once.
      * See `depositToken` for more details.
@@ -337,6 +361,9 @@ contract RewardDistributor is
         _checkpointToken(token, false);
 
         uint256 amount = _claimToken(user, token);
+
+        rewardFaucet.distributePastRewards(address(token));
+
         return amount;
     }
 
@@ -366,6 +393,7 @@ contract RewardDistributor is
         for (uint256 i = 0; i < tokensLength; ++i) {
             _checkpointToken(tokens[i], false);
             amounts[i] = _claimToken(user, tokens[i]);
+            rewardFaucet.distributePastRewards(address(tokens[i]));
         }
 
         return amounts;

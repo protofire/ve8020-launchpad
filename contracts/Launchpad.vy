@@ -7,6 +7,8 @@
 
 votingEscrow: public(address)
 rewardDistributor: public(address)
+rewardFaucet: public(address)
+
 admin: public(address)
 
 
@@ -22,30 +24,40 @@ interface IVotingEscrow:
 interface IRewardDistributor:
     def initialize(
         veAddress: address,
+        rewardFaucet: address,
         startTime: uint256,
         admin: address
     ): nonpayable
 
+interface IRewardFaucet:
+    def initialize(
+        rewardDistributor: address,
+    ): nonpayable
 
 event VESystemCreated:
     token: indexed(address)
     votingEscrow: address
     rewardDistributor: address
+    rewardFaucet: address
     admin: address
 
 
 @external
 def __init__(
-    _votingEscrow: address, _rewardDistributor: address
+    _votingEscrow: address,
+    _rewardDistributor: address,
+    _rewardFaucet: address
 ):
     assert (
         _votingEscrow != empty(address) and
-        _rewardDistributor != empty(address)
+        _rewardDistributor != empty(address) and
+        _rewardFaucet != empty(address)
     ), "zero address"
 
     self.admin = msg.sender
     self.votingEscrow = _votingEscrow
     self.rewardDistributor = _rewardDistributor
+    self.rewardFaucet = _rewardFaucet
 
 
 @external
@@ -74,16 +86,24 @@ def deploy(
     )
 
     newRewardDistributor: address = create_minimal_proxy_to(self.rewardDistributor)
+    newRewardFaucet: address = create_minimal_proxy_to(self.rewardFaucet)
+    
     IRewardDistributor(newRewardDistributor).initialize(
         newVotingEscrow,
+        newRewardFaucet,
         rewardDistributorStartTime,
         msg.sender
+    )
+
+    IRewardFaucet(newRewardFaucet).initialize(
+        newRewardDistributor
     )
 
     log VESystemCreated(
         tokenBptAddr,
         newVotingEscrow,
         newRewardDistributor,
+        newRewardFaucet,
         msg.sender
     )
 
