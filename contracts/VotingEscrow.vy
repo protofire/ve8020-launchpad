@@ -65,6 +65,18 @@ event CommitOwnership:
 event ApplyOwnership:
     admin: address
 
+event EarlyUnlock:
+    status: bool
+
+event PenaltySpeed:
+    penalty_k: uint256
+
+event PenaltyTreasury:
+    penalty_treasury: address
+
+event TotalUnlock:
+    status: bool
+
 event Deposit:
     provider: indexed(address)
     value: uint256
@@ -77,6 +89,11 @@ event Withdraw:
     value: uint256
     ts: uint256
 
+event WithdrawEarly:
+    provider: indexed(address)
+    penalty: uint256
+    time_left: uint256
+
 event Supply:
     prevSupply: uint256
     supply: uint256
@@ -85,8 +102,10 @@ event Supply:
 WEEK: constant(uint256) = 7 * 86400  # all future times are rounded by week
 MAXTIME: public(uint256)
 MULTIPLIER: constant(uint256) = 10**18
+PENALTY_MULTIPLIER: constant(uint256) = 10
+PENALTY_DENOMINATOR: constant(uint256) = 10
 
-TOKEN: address
+TOKEN: public(address)
 
 NAME: String[64]
 SYMBOL: String[32]
@@ -111,6 +130,13 @@ future_admin: public(address)
 
 is_initialized: public(bool)
 
+early_unlock: public(bool)
+penalty_k: public(uint256)
+penalty_treasury: public(address)
+
+all_unlock: public(bool)
+
+
 @external
 def initialize(
     _token_addr: address,
@@ -132,9 +158,12 @@ def initialize(
     self.is_initialized = True
 
     assert(_admin_addr != empty(address)), 'empty admin'
+    self.admin = _admin_addr
+
+    self.penalty_k = 10
+    self.penalty_treasury = _admin_addr
 
     self.TOKEN = _token_addr
-    self.admin = _admin_addr
     self.point_history[0].blk = block.number
     self.point_history[0].ts = block.timestamp
 
@@ -222,6 +251,62 @@ def assert_not_contract(addr: address):
             if SmartWalletChecker(checker).check(addr):
                 return
         raise "Smart contract depositors not allowed"
+
+
+@external
+def set_early_unlock(_early_unlock: bool):
+    """
+    @notice Sets the availability for users to unlock their locks before lock-end with penalty
+    @dev Only the admin can execute this function.
+    @param _early_unlock A boolean indicating whether early unlock is allowed or not.
+    """
+    assert msg.sender == self.admin, '!admin'  # dev: admin only
+    assert _early_unlock != self.early_unlock, 'already'
+    
+    self.early_unlock = _early_unlock
+    log EarlyUnlock(_early_unlock)
+
+
+@external
+def set_early_unlock_penalty_speed(_penalty_k: uint256):
+    """
+    @notice Sets penalty speed for early unlocking
+    @dev Only the admin can execute this function.
+    @param _penalty_k Coefficient indicating the penalty speed for early unlock.
+                      Must be between 1 and 50, inclusive. Default 10.
+    """
+    assert msg.sender == self.admin, '!admin'  # dev: admin only
+    assert _penalty_k <= 50, '!k'
+   
+    self.penalty_k = _penalty_k
+    log PenaltySpeed(_penalty_k)
+
+
+@external
+def set_penalty_treasury(_penalty_treasury: address):
+    """
+    @notice Sets penalty treasury address
+    @dev Only the admin can execute this function.
+    @param _penalty_treasury The address to collect early penalty (default admin address)
+    """
+    assert msg.sender == self.admin, '!admin'  # dev: admin only
+    assert _penalty_treasury != empty(address), '!zero'
+   
+    self.penalty_treasury = _penalty_treasury
+    log PenaltyTreasury(_penalty_treasury)
+
+
+@external
+def set_all_unlock():
+    """
+    @notice Deactivates VotingEscrow and allows users to unlock their locks before lock-end. 
+            New deposits will no longer be accepted.
+    @dev Only the admin can execute this function. Make sure there are no rewards for distribution in other contracts.
+    """
+    assert msg.sender == self.admin, '!admin'  # dev: admin only
+    
+    self.all_unlock = True
+    log TotalUnlock(True)
 
 
 @external
@@ -386,6 +471,9 @@ def _deposit_for(_addr: address, _value: uint256, unlock_time: uint256, locked_b
     @param unlock_time New time when to unlock the tokens, or 0 if unchanged
     @param locked_balance Previous locked amount / timestamp
     """
+    # block all new deposits (and extensions) in case of unlocked contract
+    assert (not self.all_unlock), "all unlocked,no sense"
+
     _locked: LockedBalance = locked_balance
     supply_before: uint256 = self.supply
 
@@ -502,7 +590,7 @@ def withdraw():
     @dev Only possible if the lock has expired
     """
     _locked: LockedBalance = self.locked[msg.sender]
-    assert block.timestamp >= _locked.end, "The lock didn't expire"
+    assert block.timestamp >= _locked.end or self.all_unlock, "lock !expire or !unlock"
     value: uint256 = convert(_locked.amount, uint256)
 
     old_locked: LockedBalance = _locked
@@ -521,6 +609,57 @@ def withdraw():
 
     log Withdraw(msg.sender, value, block.timestamp)
     log Supply(supply_before, supply_before - value)
+
+
+@external
+@nonreentrant("lock")
+def withdraw_early():
+    """
+    @notice Withdraws locked tokens for `msg.sender` before lock-end with penalty
+    @dev Only possible if `early_unlock` is enabled (true)
+    By defualt there is linear formula for calculating penalty. 
+    In some cases an admin can configure penalty speed using `set_early_unlock_penalty_speed()`
+    
+    L - lock amount
+    k - penalty coefficient, defined by admin (default 1)
+    Tleft - left time to unlock
+    Tmax - MAXLOCK time
+    Penalty amount = L * k * (Tlast / Tmax)
+    """
+    assert(self.early_unlock == True), "!early unlock"
+
+    _locked: LockedBalance = self.locked[msg.sender]
+    assert block.timestamp < _locked.end, "lock expired"
+
+    value: uint256 = convert(_locked.amount, uint256)
+
+    time_left: uint256 = _locked.end - block.timestamp
+    penalty_ratio: uint256 = (MULTIPLIER * time_left / self.MAXTIME) * (PENALTY_MULTIPLIER * self.penalty_k / PENALTY_DENOMINATOR)
+    penalty: uint256 = (value * penalty_ratio / MULTIPLIER) / PENALTY_MULTIPLIER    
+    if penalty > value:
+        penalty = value
+    user_amount: uint256 = value - penalty
+
+    old_locked: LockedBalance = _locked
+    _locked.end = 0
+    _locked.amount = 0
+    self.locked[msg.sender] = _locked
+    supply_before: uint256 = self.supply
+    self.supply = supply_before - value
+
+    # old_locked can have either expired <= timestamp or zero end
+    # _locked has only 0 end
+    # Both can have >= 0 amount
+    self._checkpoint(msg.sender, old_locked, _locked)
+
+    if penalty > 0:
+        assert ERC20(self.TOKEN).transfer(self.penalty_treasury, penalty, default_return_value=True)
+    if user_amount > 0:
+        assert ERC20(self.TOKEN).transfer(msg.sender, user_amount, default_return_value=True)
+
+    log Withdraw(msg.sender, value, block.timestamp)
+    log Supply(supply_before, supply_before - value)
+    log WithdrawEarly(msg.sender, penalty, time_left)
 
 
 # The following ERC20/minime-compatible methods are not real balanceOf and supply!
