@@ -5,33 +5,31 @@
 @license MIT
 """
 
-votingEscrow: public(address)
-rewardDistributor: public(address)
-rewardFaucet: public(address)
-
-admin: public(address)
+votingEscrow: public(immutable(address))
+rewardDistributor: public(immutable(address))
+rewardFaucet: public(immutable(address))
 
 
 interface IVotingEscrow:
     def initialize(
-        token: address,
-        name: String[64],
-        symbol: String[32],
-        admin: address,
-        maxLockTime: uint256
+        _token: address,
+        _name: String[64],
+        _symbol: String[32],
+        _admin: address,
+        _maxLockTime: uint256
     ): nonpayable
 
 interface IRewardDistributor:
     def initialize(
-        veAddress: address,
-        rewardFaucet: address,
-        startTime: uint256,
-        admin: address
+        _veAddress: address,
+        _rewardFaucet: address,
+        _startTime: uint256,
+        _admin: address
     ): nonpayable
 
 interface IRewardFaucet:
     def initialize(
-        rewardDistributor: address,
+        _rewardDistributor: address,
     ): nonpayable
 
 event VESystemCreated:
@@ -54,10 +52,9 @@ def __init__(
         _rewardFaucet != empty(address)
     ), "zero address"
 
-    self.admin = msg.sender
-    self.votingEscrow = _votingEscrow
-    self.rewardDistributor = _rewardDistributor
-    self.rewardFaucet = _rewardFaucet
+    votingEscrow = _votingEscrow
+    rewardDistributor = _rewardDistributor
+    rewardFaucet = _rewardFaucet
 
 
 @external
@@ -67,16 +64,16 @@ def deploy(
     symbol: String[32],
     maxLockTime: uint256,
     rewardDistributorStartTime: uint256,
-) -> (address, address):
+) -> (address, address, address):
     """
-    @notice Deploys new VotingEscrow and RewardDistributor contracts
+    @notice Deploys new VotingEscrow, RewardDistributor and RewardFaucet contracts
     @param tokenBptAddr The address of the token to be used for locking
     @param name The name for the new VotingEscrow contract
     @param symbol The symbol for the new VotingEscrow contract
     @param maxLockTime A constraint for the maximum lock time in the new VotingEscrow contract
     @param rewardDistributorStartTime The start time for reward distribution
     """
-    newVotingEscrow: address = create_minimal_proxy_to(self.votingEscrow)
+    newVotingEscrow: address = create_minimal_proxy_to(votingEscrow)
     IVotingEscrow(newVotingEscrow).initialize(
         tokenBptAddr,
         name,
@@ -85,8 +82,8 @@ def deploy(
         maxLockTime
     )
 
-    newRewardDistributor: address = create_minimal_proxy_to(self.rewardDistributor)
-    newRewardFaucet: address = create_minimal_proxy_to(self.rewardFaucet)
+    newRewardDistributor: address = create_minimal_proxy_to(rewardDistributor)
+    newRewardFaucet: address = create_minimal_proxy_to(rewardFaucet)
     
     IRewardDistributor(newRewardDistributor).initialize(
         newVotingEscrow,
@@ -107,4 +104,4 @@ def deploy(
         msg.sender
     )
 
-    return (newVotingEscrow, newRewardDistributor)
+    return (newVotingEscrow, newRewardDistributor, newRewardFaucet)

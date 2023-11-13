@@ -189,10 +189,6 @@ describe("Launchpad flow test 3 with multiple rewards", function () {
         rewardFaucetImpl.address
         )) as Launchpad;
     });
-
-    it('Should set admin of launchpad', async () => {
-      expect(await launchpad.admin()).to.equal(ownerAddress);
-    });
     
     it('Should set correct VE implementation of launchpad', async () => {
       expect(await launchpad.votingEscrow())
