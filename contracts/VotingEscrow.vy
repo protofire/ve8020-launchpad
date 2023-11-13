@@ -492,7 +492,7 @@ def _deposit_for(_addr: address, _value: uint256, unlock_time: uint256, locked_b
     self._checkpoint(_addr, old_locked, _locked)
 
     if _value != 0:
-        assert ERC20(self.TOKEN).transferFrom(_addr, self, _value)
+        assert ERC20(self.TOKEN).transferFrom(_addr, self, _value, default_return_value=True)
 
     log Deposit(_addr, _value, _locked.end, type, block.timestamp)
     log Supply(supply_before, supply_before + _value)
@@ -605,7 +605,7 @@ def withdraw():
     # Both can have >= 0 amount
     self._checkpoint(msg.sender, old_locked, _locked)
 
-    assert ERC20(self.TOKEN).transfer(msg.sender, value)
+    assert ERC20(self.TOKEN).transfer(msg.sender, value, default_return_value=True)
 
     log Withdraw(msg.sender, value, block.timestamp)
     log Supply(supply_before, supply_before - value)

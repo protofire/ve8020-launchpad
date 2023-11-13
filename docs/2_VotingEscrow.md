@@ -56,6 +56,55 @@ function withdraw() external;
 Withdraw all tokens for `msg.sender` when lock has expired.
 
 
+## Early Unlock
+By default, the option for early unlocking is disabled in the contract.
+There are two types of unlocks that can be enabled by the contract administrator.
+
+### Unlock with penalty (soft unlock)
+Allows users to withdraw their funds before the lockup period ends. Users are penalized proportionally to the time remaining until the end of the lockup. The administrator can also configure the penalty rate (speed) using `set_early_unlock_penalty_speed()` function. See formula below:  
+```
+  L - lock amount
+  k - penalty coefficient [0: 5], defined by admin (default 1)
+  Tleft - left time to unlock
+  Tmax - MAXLOCK time
+  Penalty amount = L * k * (Tlast / Tmax)
+```
+
+To enable unlock with penalties the function `set_early_unlock(true)` must be called:
+```sh
+function set_early_unlock(bool _early_unlock) external;
+```
+Parameters:  
+`_early_unlock` - A boolean indicating whether early unlock is allowed or not.
+Sets the availability for users to unlock their locks before lock-end with penalty  
+
+
+To set penalty rate (speed) for early unlocking:
+```sh
+function set_early_unlock_penalty_speed(uint256 _penalty_k) external;
+```  
+Parameters:  
+`_penalty_k` - Coefficient indicating the penalty speed for early unlock. Must be between 0 and 50, inclusive. Default 10.  
+This function provides a dynamic way for the admin to control how quickly penalties increase for early unlocking. The `_penalty_k` coefficient determines the rate at which penalties accumulate based on the remaining time until the lock-end. Since the `PENALTY_DENOMINATOR = 10` values below 10 will decrease penalty rate, and values above 10 will increase penalty rate. In case when `_penalty_k = 10` the `k` value of the formula above is equal 1.
+
+
+To withdraw early with penalty:  
+```sh
+function withdraw_early()
+```
+Withdraws locked tokens for `msg.sender` before lock-end with penalty.
+
+
+### Unlock All Locks (hard unlock)
+Allows all users to withdraw their funds ahead of schedule. Attention! In case this option is activated, the contract effectively terminates (there is no turning back!). New locks cannot be created. Consider this fact when distributing rewards in RewardFaucet and RewardDistributor contracts.  
+
+To enable unlock for all locks the function `set_all_unlock()` must be called:
+```sh
+function set_all_unlock() external;
+```
+Deactivates VotingEscrow and allows users to unlock their locks before lock-end. New deposits will no longer be accepted.
+
+
 
 ## Admin functions
 
