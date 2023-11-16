@@ -65,7 +65,7 @@ let DAY: number = 60 * 60 * 24;
 let WEEK: number = 60 * 60 * 24 * 7;
 
 
-describe("Launchpad flow test", function () {
+describe("Lock-cancel unit tests", function () {
 
   before(async () => {
     [owner, creator, user1, user2, user3] = await ethers.getSigners();
@@ -209,7 +209,7 @@ describe("Launchpad flow test", function () {
     let rewardDistributor: RewardDistributor;
 
     let rewardStartTime: number;
-    let maxLockTime: number = DAY * 30; // 30 days
+    let maxLockTime: number = WEEK * 8; // 30 days
 
     before(async () => {
       rewardStartTime = (await time.latest()) + WEEK;
@@ -222,21 +222,6 @@ describe("Launchpad flow test", function () {
         rewardStartTime
       );
       txReceipt = await txResult.wait();
-    });
-
-    it('Should emit event on deployment', async () => {
-      // @ts-ignore
-      const event = txReceipt.events[0];
-      // @ts-ignore
-      expect(event.args.token).to.equal(bptToken.address);
-      // @ts-ignore
-      expect(event.args.admin).to.equal(creatorAddress);
-      // @ts-ignore
-      expect(event.args.votingEscrow)
-        .to.not.equal(constants.AddressZero);
-      // @ts-ignore
-      expect(event.args.rewardDistributor)
-        .to.not.equal(constants.AddressZero);
     });
 
     describe('Deployed system test', function () {
@@ -267,149 +252,57 @@ describe("Launchpad flow test", function () {
           .to.equal(bptToken.address);
       });
 
-      it('Should return non-zero initial point_history', async () => {
-        const firstPH = await votingEscrow.point_history(0);
-        expect(firstPH.blk).to.be.gt(3);
-        expect(firstPH.ts).to.be.gt(1000);
+      it('Should return correct initial states for VotingEscrow unlocks', async () => {
+        expect(await votingEscrow.early_unlock()).to.equal(false);
+        expect(await votingEscrow.all_unlock()).to.equal(false);
       });
 
-      it('Should return correct admin of the VotingEscrow', async () => {
+      it('Should return correct admin ', async () => {
         expect(await votingEscrow.admin()).to.equal(creatorAddress);
       });
 
-      it('Should return correct MAXTIME of the lock of the VotingEscrow', async () => {
-        expect(await votingEscrow.MAXTIME()).to.equal(maxLockTime);
+      it('Should not be possible to call commit_transfer_ownership by non-admin ', async () => {
+        await expect(votingEscrow.connect(user1).commit_transfer_ownership(user2Address))
+          .to.be.revertedWithoutReason();
       });
 
-      it(`Shouldn't allow to initialize VotingEscrow again`, async () => {
-        await expect(votingEscrow.initialize(
-          bptToken.address,
-          'newNameFail',
-          'newSymbolFail',
-          creatorAddress,
-          maxLockTime
-        ))
-          .to.be.revertedWith('only once');
+      it('Should not be possible to call apply_transfer_ownership by non-admin', async () => {
+        await expect(votingEscrow.connect(user1).apply_transfer_ownership())
+          .to.be.revertedWithoutReason();
       });
 
-      it('Should return correct of the VotingEscrow for the rewardDistributor', async () => {
-        expect(await rewardDistributor.getVotingEscrow())
-          .to.equal(votingEscrow.address);
+      it('Should return zero-address for the future admin', async () => {
+        expect(await votingEscrow.future_admin()).to.equal(constants.AddressZero);
       });
 
-      it('Should return non-zero timeCursor of the VotingEscrow', async () => {
-        expect(await rewardDistributor.getTimeCursor())
-          .to.be.gt(await time.latest());
-      });
-
-      describe('Users make locks (deposit)', function () {
+      describe('Commit new admin ', function () {
         let createLockTime: number;
 
         before(async() => {
-          // approvals before deposit
-          await bptToken.connect(user1).approve(votingEscrow.address, constants.MaxUint256);
-          await bptToken.connect(user2).approve(votingEscrow.address, constants.MaxUint256);
-
-          // lock-deposit
-          createLockTime = await time.latest();
-          await votingEscrow.connect(user1).create_lock(user1Amount, createLockTime + WEEK * 2);
-          await votingEscrow.connect(user2).create_lock(user2Amount, createLockTime + WEEK * 2);
-
+          await votingEscrow.connect(creator).commit_transfer_ownership(user2Address);
         });
 
-        it('Should return zero balance after deposit', async () => {
-          expect(await bptToken.balanceOf(user1Address)).to.equal(constants.Zero);
-          expect(await bptToken.balanceOf(user2Address)).to.equal(constants.Zero);
+        it('Should return user2address as new admin', async () => {
+          expect(await votingEscrow.future_admin()).to.equal(user2Address);
         });
 
-        it('Should increase votingEscrow balance', async () => {
-          expect(await bptToken.balanceOf(votingEscrow.address))
-            .to.equal(user1Amount.add(user2Amount));
-        })
-      });
-
-      describe('Adding reward tokens', function () {
-        let startRewardTime: number;
-
-        before(async() => {
-          const depositAmount = totalRewardAmount;
-
-          await rewardToken.connect(creator)
-            .approve(rewardDistributor.address, constants.MaxUint256);
-
-          await rewardDistributor.connect(creator)
-            .addAllowedRewardTokens([rewardToken.address]);
-          
-          startRewardTime = (await rewardDistributor.getTimeCursor()).toNumber();
-          await time.increaseTo(startRewardTime);
-
-          await rewardDistributor.connect(creator)
-            .depositToken(rewardToken.address, totalRewardAmount);
+        it('Should not be possible to call apply_transfer_ownership() for future admin', async () => {
+          await expect(votingEscrow.connect(user2).apply_transfer_ownership())
+            .to.be.revertedWithoutReason();
         });
 
-        it('Should be able to deposit rewards into rewardDistributor', async () => {
-
-          expect(await rewardToken.balanceOf(rewardDistributor.address))
-            .to.equal(totalRewardAmount);
-        })
-
-        describe('Check available rewards after first WEEK past', function () {
-          before(async () => {
-            await time.increase(WEEK);
-          });
-
-          it('Should calculate correct claimable amounts of reward', async () => {
-            let rewards = await lens.callStatic.getUserClaimableReward(rewardDistributor.address, user1Address, rewardToken.address)
+        describe('Apply new admin', function () {
+          before(async() => {
             
-            const user1rewards = (
-              await lens.callStatic.getUserClaimableReward(
-                rewardDistributor.address,
-                user1Address,
-                rewardToken.address
-                )
-              ).claimableAmount;
-            const user2rewards = (
-              await lens.callStatic.getUserClaimableReward(
-                rewardDistributor.address,
-                user2Address,
-                rewardToken.address
-                )
-              ).claimableAmount
-
-            // add 1 due to rounding
-            expect(user1rewards.add(user2rewards).add(constants.One)).to.equal(totalRewardAmount);
+            await votingEscrow.connect(creator).apply_transfer_ownership();
           });
 
-          describe('Rewards claiming', function () {
-            let user1RewardBefore: BigNumber;
-            let user2RewardBefore: BigNumber;
-
-            before(async () => {
-              user1RewardBefore = await rewardToken.balanceOf(user1Address);
-              user2RewardBefore = await rewardToken.balanceOf(user2Address);
-
-              await rewardDistributor.connect(user1)
-                .claimToken(user1Address, rewardToken.address);
-              await rewardDistributor.connect(user2)
-                .claimToken(user2Address, rewardToken.address);              
-            });
-
-            it('Should increase reward balance after claim', async () => {
-              const user1RewardAfter = await rewardToken.balanceOf(user1Address);
-              const user2RewardAfter = await rewardToken.balanceOf(user2Address);
-              expect(user1RewardAfter).to.be.gt(user1RewardBefore).to.be.gt(constants.Two);
-              expect(user2RewardAfter).to.be.gt(user2RewardBefore).to.be.gt(constants.Two);
-
-              expect(user1RewardAfter.add(user2RewardAfter).add(constants.One)).to.equal(totalRewardAmount);
-            });
-
-            it('Should decrease RewardDustributor balance after claim', async () => {
-              const rdBalance = await rewardToken.balanceOf(rewardDistributor.address);
-
-              expect(rdBalance).to.be.lte(constants.One);
-            });
+          it('Should return new admin', async () => {
+            expect(await votingEscrow.admin()).to.equal(user2Address);
           });
+
         });
+
       });
     });
   });

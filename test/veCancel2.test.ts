@@ -65,7 +65,7 @@ let DAY: number = 60 * 60 * 24;
 let WEEK: number = 60 * 60 * 24 * 7;
 
 
-describe("Launchpad flow test", function () {
+describe("Lock-cancel unit tests", function () {
 
   before(async () => {
     [owner, creator, user1, user2, user3] = await ethers.getSigners();
@@ -209,7 +209,7 @@ describe("Launchpad flow test", function () {
     let rewardDistributor: RewardDistributor;
 
     let rewardStartTime: number;
-    let maxLockTime: number = DAY * 30; // 30 days
+    let maxLockTime: number = WEEK * 8; // 30 days
 
     before(async () => {
       rewardStartTime = (await time.latest()) + WEEK;
@@ -222,21 +222,6 @@ describe("Launchpad flow test", function () {
         rewardStartTime
       );
       txReceipt = await txResult.wait();
-    });
-
-    it('Should emit event on deployment', async () => {
-      // @ts-ignore
-      const event = txReceipt.events[0];
-      // @ts-ignore
-      expect(event.args.token).to.equal(bptToken.address);
-      // @ts-ignore
-      expect(event.args.admin).to.equal(creatorAddress);
-      // @ts-ignore
-      expect(event.args.votingEscrow)
-        .to.not.equal(constants.AddressZero);
-      // @ts-ignore
-      expect(event.args.rewardDistributor)
-        .to.not.equal(constants.AddressZero);
     });
 
     describe('Deployed system test', function () {
@@ -267,40 +252,63 @@ describe("Launchpad flow test", function () {
           .to.equal(bptToken.address);
       });
 
-      it('Should return non-zero initial point_history', async () => {
-        const firstPH = await votingEscrow.point_history(0);
-        expect(firstPH.blk).to.be.gt(3);
-        expect(firstPH.ts).to.be.gt(1000);
+      it('Should return correct initial states for VotingEscrow unlocks', async () => {
+        expect(await votingEscrow.early_unlock()).to.equal(false);
+        expect(await votingEscrow.all_unlock()).to.equal(false);
+
       });
 
-      it('Should return correct admin of the VotingEscrow', async () => {
-        expect(await votingEscrow.admin()).to.equal(creatorAddress);
+      it('Should return correct initial states penalty_k', async () => {
+        expect(await votingEscrow.penalty_k()).to.equal(10);
       });
 
-      it('Should return correct MAXTIME of the lock of the VotingEscrow', async () => {
-        expect(await votingEscrow.MAXTIME()).to.equal(maxLockTime);
+      it(`Should change penalty speed by admin`, async () => {
+        const penaltyDefault = 10;
+        const penaltyNew = 45;
+        
+        await votingEscrow.connect(creator).set_early_unlock_penalty_speed(penaltyNew);
+        expect(await votingEscrow.penalty_k()).to.equal(penaltyNew);
+
+        await votingEscrow.connect(creator).set_early_unlock_penalty_speed(penaltyDefault);
+        expect(await votingEscrow.penalty_k()).to.equal(penaltyDefault);
       });
 
-      it(`Shouldn't allow to initialize VotingEscrow again`, async () => {
-        await expect(votingEscrow.initialize(
-          bptToken.address,
-          'newNameFail',
-          'newSymbolFail',
-          creatorAddress,
-          maxLockTime
-        ))
-          .to.be.revertedWith('only once');
+      it(`Shouldn't allow to call set_early_unlock() for non-admin`, async () => {
+        await expect(votingEscrow.connect(user1).set_early_unlock(true))
+          .to.be.revertedWith('!admin');
       });
 
-      it('Should return correct of the VotingEscrow for the rewardDistributor', async () => {
-        expect(await rewardDistributor.getVotingEscrow())
-          .to.equal(votingEscrow.address);
+      it(`Shouldn't allow to call set_early_unlock() with current value`, async () => {
+        const currentEarlyUnlock = await votingEscrow.early_unlock();
+        await expect(votingEscrow.connect(creator).set_early_unlock(currentEarlyUnlock))
+          .to.be.revertedWith('already');
       });
 
-      it('Should return non-zero timeCursor of the VotingEscrow', async () => {
-        expect(await rewardDistributor.getTimeCursor())
-          .to.be.gt(await time.latest());
+      it(`Shouldn't allow to call set_early_unlock_penalty_speed() for non-admin`, async () => {
+        await expect(votingEscrow.connect(user1).set_early_unlock_penalty_speed(5))
+          .to.be.revertedWith('!admin');
       });
+
+      it(`Shouldn't allow to call set_early_unlock_penalty_speed() more then 50`, async () => {
+        await expect(votingEscrow.connect(creator).set_early_unlock_penalty_speed(51))
+          .to.be.revertedWith('!k');
+      });
+
+      it(`Shouldn't allow to set penalty treasury for non-admin`, async () => {
+        await expect(votingEscrow.connect(user1).set_penalty_treasury(user1Address))
+          .to.be.revertedWith('!admin');
+      });
+
+      it(`Shouldn't allow to set penalty treasury to zero-address`, async () => {
+        await expect(votingEscrow.connect(creator).set_penalty_treasury(constants.AddressZero))
+          .to.be.revertedWith('!zero');
+      });
+
+      it(`Shouldn't allow to call set_all_unlock() for non-admin`, async () => {
+        await expect(votingEscrow.connect(user1).set_all_unlock())
+          .to.be.revertedWith('!admin');
+      });
+
 
       describe('Users make locks (deposit)', function () {
         let createLockTime: number;
@@ -312,12 +320,11 @@ describe("Launchpad flow test", function () {
 
           // lock-deposit
           createLockTime = await time.latest();
-          await votingEscrow.connect(user1).create_lock(user1Amount, createLockTime + WEEK * 2);
-          await votingEscrow.connect(user2).create_lock(user2Amount, createLockTime + WEEK * 2);
-
+          await votingEscrow.connect(user1).create_lock(user1Amount, createLockTime + WEEK * 8);
+          await votingEscrow.connect(user2).create_lock(user2Amount, createLockTime + WEEK * 8);
         });
 
-        it('Should return zero balance after deposit', async () => {
+        it('Should return zero users balance after deposit', async () => {
           expect(await bptToken.balanceOf(user1Address)).to.equal(constants.Zero);
           expect(await bptToken.balanceOf(user2Address)).to.equal(constants.Zero);
         });
@@ -325,90 +332,154 @@ describe("Launchpad flow test", function () {
         it('Should increase votingEscrow balance', async () => {
           expect(await bptToken.balanceOf(votingEscrow.address))
             .to.equal(user1Amount.add(user2Amount));
-        })
-      });
-
-      describe('Adding reward tokens', function () {
-        let startRewardTime: number;
-
-        before(async() => {
-          const depositAmount = totalRewardAmount;
-
-          await rewardToken.connect(creator)
-            .approve(rewardDistributor.address, constants.MaxUint256);
-
-          await rewardDistributor.connect(creator)
-            .addAllowedRewardTokens([rewardToken.address]);
-          
-          startRewardTime = (await rewardDistributor.getTimeCursor()).toNumber();
-          await time.increaseTo(startRewardTime);
-
-          await rewardDistributor.connect(creator)
-            .depositToken(rewardToken.address, totalRewardAmount);
         });
 
-        it('Should be able to deposit rewards into rewardDistributor', async () => {
+        it('Should create locks for users', async () => {
+          const user1Lock = await votingEscrow.locked(user1Address);
+          const user2Lock = await votingEscrow.locked(user2Address);
 
-          expect(await rewardToken.balanceOf(rewardDistributor.address))
-            .to.equal(totalRewardAmount);
-        })
+          expect(user1Lock[0]).to.equal(user1Amount);
+          expect(user2Lock[0]).to.equal(user2Amount);
 
-        describe('Check available rewards after first WEEK past', function () {
-          before(async () => {
-            await time.increase(WEEK);
+          // week rounding
+          expect(user1Lock[1])
+            .to.be.gt(BigNumber.from(createLockTime + WEEK * 7))
+            .to.be.lt(BigNumber.from(createLockTime + WEEK * 9));
+          expect(user2Lock[1])
+            .to.be.gt(BigNumber.from(createLockTime + WEEK * 7))
+            .to.be.lt(BigNumber.from(createLockTime + WEEK * 9));
+        });
+
+        describe('Trying to unlock before when not allowed', function() {
+          before(async() => {
+            await time.increase(DAY);
           });
 
-          it('Should calculate correct claimable amounts of reward', async () => {
-            let rewards = await lens.callStatic.getUserClaimableReward(rewardDistributor.address, user1Address, rewardToken.address)
+          it("Should not be available to withdraw() when not allowed", async() => {
+            await expect(votingEscrow.connect(user1).withdraw())
+              .to.be.revertedWith("lock !expire or !unlock");
             
-            const user1rewards = (
-              await lens.callStatic.getUserClaimableReward(
-                rewardDistributor.address,
-                user1Address,
-                rewardToken.address
-                )
-              ).claimableAmount;
-            const user2rewards = (
-              await lens.callStatic.getUserClaimableReward(
-                rewardDistributor.address,
-                user2Address,
-                rewardToken.address
-                )
-              ).claimableAmount
-
-            // add 1 due to rounding
-            expect(user1rewards.add(user2rewards).add(constants.One)).to.equal(totalRewardAmount);
+            await expect(votingEscrow.connect(user2).withdraw())
+              .to.be.revertedWith("lock !expire or !unlock");
           });
 
-          describe('Rewards claiming', function () {
-            let user1RewardBefore: BigNumber;
-            let user2RewardBefore: BigNumber;
+          it("Should not be available to withdraw_early() when not allowed", async() => {
+            await expect(votingEscrow.connect(user1).withdraw_early())
+              .to.be.revertedWith("!early unlock");
+            
+            await expect(votingEscrow.connect(user2).withdraw_early())
+              .to.be.revertedWith("!early unlock");
+          });
+
+        });
+
+        describe('With enabled early unlock (with penalty) with high K-penalty', function () {
+          before(async() => {
+            await votingEscrow.connect(creator).set_early_unlock_penalty_speed(50);
+            await votingEscrow.connect(creator).set_early_unlock(true);
+
+            await time.increase(DAY * 2)
+
+            await votingEscrow.connect(user1).withdraw_early();
+          });
+
+          it('Should turn on early unlock', async () => {
+            expect(await votingEscrow.early_unlock()).to.equal(true);
+          });
+
+          it('Should increase k-penalty', async () => {
+            expect(await votingEscrow.penalty_k()).to.equal(50);
+          });
+
+
+          it('Should charge all lock amount for penalty', async () => {
+            expect(await bptToken.balanceOf(creatorAddress)).to.equal(user1Amount);
+          });
+
+          it('Should not return anything to user1', async () => {
+            expect(await bptToken.balanceOf(user1Address)).to.equal(constants.Zero);
+          });
+
+          it('Should return correct sum balances of penalty and user1', async () => {
+            const penalty = await bptToken.balanceOf(creatorAddress);
+            const withdrawed = await bptToken.balanceOf(user1Address);
+            expect(penalty.add(withdrawed)).to.equal(user1Amount);
+          });
+
+          it('Should close user1 lock', async () => {
+            const user1Lock = await votingEscrow.locked(user1Address);
+            expect(user1Lock[0]).to.equal(constants.Zero);
+            expect(user1Lock[1]).to.equal(constants.Zero);
+          });
+
+
+          describe('When  K-penalty is zero and user2 withdraws early', function () {
+            let user1BalanceBeforeLock: BigNumber;
+            let createLockTime: number;
 
             before(async () => {
-              user1RewardBefore = await rewardToken.balanceOf(user1Address);
-              user2RewardBefore = await rewardToken.balanceOf(user2Address);
+              await time.increase(DAY);
+              await votingEscrow.connect(creator).set_early_unlock_penalty_speed(0);
 
-              await rewardDistributor.connect(user1)
-                .claimToken(user1Address, rewardToken.address);
-              await rewardDistributor.connect(user2)
-                .claimToken(user2Address, rewardToken.address);              
+              createLockTime = await time.latest();
+              await votingEscrow.connect(user2).withdraw_early();
             });
 
-            it('Should increase reward balance after claim', async () => {
-              const user1RewardAfter = await rewardToken.balanceOf(user1Address);
-              const user2RewardAfter = await rewardToken.balanceOf(user2Address);
-              expect(user1RewardAfter).to.be.gt(user1RewardBefore).to.be.gt(constants.Two);
-              expect(user2RewardAfter).to.be.gt(user2RewardBefore).to.be.gt(constants.Two);
-
-              expect(user1RewardAfter.add(user2RewardAfter).add(constants.One)).to.equal(totalRewardAmount);
+            it('Should decrease k-penalty', async () => {
+              expect(await votingEscrow.penalty_k()).to.equal(0);
             });
 
-            it('Should decrease RewardDustributor balance after claim', async () => {
-              const rdBalance = await rewardToken.balanceOf(rewardDistributor.address);
-
-              expect(rdBalance).to.be.lte(constants.One);
+            it('Should return start balance of user2 k-penalty', async () => {
+              expect(await bptToken.balanceOf(user2Address)).to.equal(user2Amount);
             });
-          });
+
+            it('Should close user1 lock', async () => {
+              const user2Lock = await votingEscrow.locked(user2Address);
+              expect(user2Lock[0]).to.equal(constants.Zero);
+              expect(user2Lock[1]).to.equal(constants.Zero);
+            });
+
+            describe('With new user2 lock', function () {
+              before(async () => {
+                await time.increase(DAY);
+                const currentTime = await time.latest();
+                await votingEscrow.connect(creator).set_early_unlock_penalty_speed(10);
+                await votingEscrow.connect(user2).create_lock(user2Amount, currentTime + WEEK * 2);
+              });
+
+              it('Should set default k-penalty', async () => {
+                expect(await votingEscrow.penalty_k()).to.equal(10);
+              });
+
+              it('Should create new lock for user 2', async () => {
+                expect(await bptToken.balanceOf(user2Address)).to.equal(constants.Zero);
+                const user2Lock = await votingEscrow.locked(user2Address);
+                expect(user2Lock[0]).to.equal(user2Amount);
+              });
+
+              describe('Withdraws without penalty when lock is expired', function () {
+
+                before(async () => {
+                  await time.increase(WEEK * 3);
+                });
+
+                it(`Should not be possible to use withdraw_early(), because lock expired`, async () => {
+                  await expect(votingEscrow.connect(user2).withdraw_early())
+                    .to.be.revertedWith("lock expired");
+                })
+
+                it(`Should be possible to use withdraw(), when lock expired`, async () => {
+                  await votingEscrow.connect(user2).withdraw();
+
+                  expect(await bptToken.balanceOf(user2Address)).to.equal(user2Amount);
+                  const user2Lock = await votingEscrow.locked(user2Address);
+                  expect(user2Lock[0]).to.equal(constants.Zero);
+
+                })
+              });
+
+            });
+          });    
         });
       });
     });
