@@ -2,10 +2,16 @@
 The contract allows locking tokens for a selected period of time and receiving rewards from the RewardsDistribution contract in return. It utilizes the VotingEscrow contract from Curve as its implementation.
 
 ## Code  
-[VotingEscrow.vy](../contracts/VotingEscrow.vy)
+[VotingEscrow.vy](../contracts/VotingEscrow.vy)  
 
 
-### Interactions with other smart contracts
+## MaxLock Time and Lock Durations
+The creator of the VE-System must choose the maximum lock duration (`MAXTIME`), which should be more than 1 week.  
+The voting power of each user's lock is calculated based on `MAXTIME`. You can find a calculation example at the [provided link](https://docs.curve.fi/curve_dao/voting-escrow/voting-escrow/).  
+When selecting `MAXTIME`, the VE-System creator should consider the planned reward distribution period in the RewardDistributor contract (and, if applicable, RewardFaucet contract).  
+
+
+### Interactions with other smart contracts (Smart-Wallets)
 By default, the VotingEscrow contract restricts access for other smart contracts. If you want to configure access for other smart contracts, you need to use the functionality of the third-party `SmartWalletWhitelist` smart contract. With `SmartWalletWhitelist`, you can grant access to all possible smart contracts or only a specific list. [Refer to the instructions](./misc_docs/SmartWalletWhitelist.md) for deploying and configuring access for smart contracts to VotingEscrow.
 
 
@@ -138,4 +144,4 @@ Applies setting external contract to check approved smart contract wallets
 
 
 ### Additional information
-Additional info can also be found [here](https://docs.curve.fi/curve_dao/VotingEscrow/VotingEscrow/)  
+Additional info can also be found [here](https://docs.curve.fi/curve_dao/voting-escrow/voting-escrow/)  
