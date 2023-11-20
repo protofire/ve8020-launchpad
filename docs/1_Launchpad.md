@@ -48,14 +48,14 @@ def deploy(
     rewardDistributorStartTime: uint256,
 ) -> (address, address):
     """
-    @notice Deploys new VotingEscrow and RewardDistributor contracts
+    @notice Deploys new VotingEscrow, RewardDistributor and RewardFaucet contracts
     @param tokenBptAddr The address of the token to be used for locking
     @param name The name for the new VotingEscrow contract
     @param symbol The symbol for the new VotingEscrow contract
     @param maxLockTime A constraint for the maximum lock time in the new VotingEscrow contract
     @param rewardDistributorStartTime The start time for reward distribution
     """
-    newVotingEscrow: address = create_minimal_proxy_to(self.votingEscrow)
+    newVotingEscrow: address = create_minimal_proxy_to(votingEscrow)
     IVotingEscrow(newVotingEscrow).initialize(
         tokenBptAddr,
         name,
@@ -64,19 +64,27 @@ def deploy(
         maxLockTime
     )
 
-    newRewardDistributor: address = create_minimal_proxy_to(self.rewardDistributor)
+    newRewardDistributor: address = create_minimal_proxy_to(rewardDistributor)
+    newRewardFaucet: address = create_minimal_proxy_to(rewardFaucet)
+    
     IRewardDistributor(newRewardDistributor).initialize(
         newVotingEscrow,
+        newRewardFaucet,
         rewardDistributorStartTime,
         msg.sender
+    )
+
+    IRewardFaucet(newRewardFaucet).initialize(
+        newRewardDistributor
     )
 
     log VESystemCreated(
         tokenBptAddr,
         newVotingEscrow,
         newRewardDistributor,
+        newRewardFaucet,
         msg.sender
     )
 
-    return (newVotingEscrow, newRewardDistributor)
+    return (newVotingEscrow, newRewardDistributor, newRewardFaucet)
 ```
