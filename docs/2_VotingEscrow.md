@@ -12,7 +12,7 @@ When selecting `MAXTIME`, the VE-System creator should consider the planned rewa
 
 
 ### Interactions with other smart contracts (Smart-Wallets)
-By default, the VotingEscrow contract restricts access for other smart contracts. If you want to configure access for other smart contracts, you need to use the functionality of the third-party `SmartWalletWhitelist` smart contract. With `SmartWalletWhitelist`, you can grant access to all possible smart contracts or only a specific list. [Refer to the instructions](./misc_docs/SmartWalletWhitelist.md) for deploying and configuring access for smart contracts to VotingEscrow.
+By default, the VotingEscrow contract restricts locking for other smart contracts. If you want to configure access for other smart contracts, you need to use the functionality of the third-party `SmartWalletWhitelist` smart contract. With `SmartWalletWhitelist`, you can grant access to all possible smart contracts or only a specific list. [Refer to the instructions](./misc_docs/SmartWalletWhitelist.md) for deploying and configuring access for smart contracts to VotingEscrow.
 
 
 ## View functions
