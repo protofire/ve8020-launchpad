@@ -830,6 +830,7 @@ contract RewardDistributor is
     function transferAdmin(address newAdmin) external onlyAdmin {
         require (newAdmin != address(0), "zero address");
         admin = newAdmin;
+        emit NewAdmin(newAdmin);
     }
 
 }

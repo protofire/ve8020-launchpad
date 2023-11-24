@@ -76,16 +76,16 @@ contract RewardFaucet is ReentrancyGuard {
             uint256 weekStart = _roundUpTimestamp(block.timestamp);
 
             for (uint256 i = 2; i <= weeksCount; ) {
-                tokenWeekAmounts[token][weekStart] += weekAmount;
-
-                unchecked { i++; }
-                weekStart += 1 weeks;
-
                 // last iteration with leftovers
                 if (i == weeksCount) {
                     tokenWeekAmounts[token][weekStart] += (totalAmount - weekAmount * (weeksCount - 1));
                     break;
                 }
+
+                tokenWeekAmounts[token][weekStart] += weekAmount;
+
+                unchecked { i++; }
+                weekStart += 1 weeks;
             }
 
             // first week will be distributed now, thus subtract 1 weekAmount
@@ -96,8 +96,9 @@ contract RewardFaucet is ReentrancyGuard {
         IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
 
         // current week distribution
-        IERC20(token).forceApprove(address(rewardDistributor), weekAmount);
-        rewardDistributor.faucetDepositToken(token, weekAmount);
+        IRewardDistributor rewardDistributor_ = rewardDistributor;
+        IERC20(token).forceApprove(address(rewardDistributor_), weekAmount);
+        rewardDistributor_.faucetDepositToken(token, weekAmount);
 
         emit WeeksDistributions(token, totalAmount, weeksCount);
     }
@@ -118,7 +119,7 @@ contract RewardFaucet is ReentrancyGuard {
         uint256 weekTimeStamp
     ) nonReentrant external {
         require(
-            weekTimeStamp >= block.timestamp && weekTimeStamp <= block.timestamp + 104 weeks,
+            weekTimeStamp >= _roundDownTimestamp(block.timestamp) && weekTimeStamp <= block.timestamp + 104 weeks,
             'bad week'
         );
 
@@ -131,10 +132,11 @@ contract RewardFaucet is ReentrancyGuard {
         uint256 weekStart = _roundDownTimestamp(weekTimeStamp);
         if (weekStart == _roundDownTimestamp(block.timestamp)) {
             // current week will be distributed now
-            IERC20(token).forceApprove(address(rewardDistributor), totalAmount);
-            rewardDistributor.faucetDepositToken(token, totalAmount);
+            IRewardDistributor rewardDistributor_ = rewardDistributor;
+            IERC20(token).forceApprove(address(rewardDistributor_), totalAmount);
+            rewardDistributor_.faucetDepositToken(token, totalAmount);
         } else {
-            tokenWeekAmounts[token][weekStart] = totalAmount;
+            tokenWeekAmounts[token][weekStart] += totalAmount;
             totalTokenRewards[token] += totalAmount;
         }
 
@@ -165,9 +167,12 @@ contract RewardFaucet is ReentrancyGuard {
         }
 
         if (totalAmount > 0) {
-            IERC20(token).forceApprove(address(rewardDistributor), totalAmount);
-            rewardDistributor.faucetDepositToken(token, totalAmount);
             totalTokenRewards[token] -= totalAmount;
+
+            IRewardDistributor rewardDistributor_ = rewardDistributor;
+            IERC20(token).forceApprove(address(rewardDistributor_), totalAmount);
+            rewardDistributor_.faucetDepositToken(token, totalAmount);
+
             emit DistributePast(token, totalAmount, weekStart);
         }
         
@@ -223,13 +228,6 @@ contract RewardFaucet is ReentrancyGuard {
         return rewards;
     }
 
-    /**
-     * @notice Sets approve manually 
-     * @dev Can be used to fix any wrong (or set new) approve manually
-     */
-    function setApprove(IERC20 token, address spender, uint256 amount) external {
-        token.approve(spender, amount);
-    }
 
     /**
      * @dev Rounds the provided timestamp down to the beginning of the previous week (Thurs 00:00 UTC)
