@@ -40,6 +40,7 @@ interface IRewardDistributor {
     );
     event TokenAdded(address indexed token);
     event RewardDeposit(IERC20 token, uint256 amount);
+    event NewAdmin(address indexed newAdmin);
 
     /**
      * @notice Returns the VotingEscrow (veBPT) token contract
