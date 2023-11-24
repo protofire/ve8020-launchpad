@@ -1,7 +1,7 @@
 ## Launchpad System Details
 
-The Launchpad system is a set of smart contracts used to lock BPT tokens (representing liquidity providers positions) in order to gain voting power on a given project, and also being able to distribute rewards to those who are locking their liquidity, incentivising governance and long term participation.  
-In addition to the BPT token lock, almost any token of any project can be used. This way, users can independently create their own systems, with their own reward tokens (incentives).
+The Launchpad system is a set of smart contracts used to lock BPT tokens (representing liquidity providers positions on Balancer) in a vote escrow system in order to gain voting power on a given project, and also being able to vote on rewards distribution to those who are locking their liquidity, incentivising governance and long term participation.  
+In addition to the BPT token lock, almost any token of any project can be used for locking. This way, users can independently create their own vote escrow systems, with their own reward tokens (incentives).
 
 Main parts of the system:  
 Launchpad - a contract factory for creating new VotingEscrow and RewardsDistribution contracts.  
@@ -28,7 +28,7 @@ function deploy(
 ) external returns (address, address);
 ```
 
-The function creates a new pair of VotingEscrow and RewardsDistribution contracts and emits an event with such new addresses. **The caller will be the admin of these new contracts.**  
+The function creates a new pair of VotingEscrow and RewardsDistribution contracts and emits an event with such new addresses. **The caller will be assigned the admin role of these new contracts.**  
 Parameters:  
 `tokenBptAddr` - the address of the token to be used for locking in the VotingEscrow contract.  
 `name` - the name for the new VotingEscrow contract. It can be any name chosen by the creator.  
