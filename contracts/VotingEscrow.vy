@@ -126,6 +126,11 @@ future_smart_wallet_checker: public(address)
 smart_wallet_checker: public(address)
 
 admin: public(address)
+
+# unlock admins can be set only once. Zero-address means unlock is disabled
+admin_unlock_all: public(address)
+admin_early_unlock: public(address)
+
 future_admin: public(address)
 
 is_initialized: public(bool)
@@ -143,6 +148,8 @@ def initialize(
     _name: String[64],
     _symbol: String[32],
     _admin_addr: address,
+    _admin_unlock_all: address,
+    _admin_early_unlock: address,
     _max_time: uint256
 ):
     """
@@ -151,6 +158,8 @@ def initialize(
     @param _name Token name
     @param _symbol Token symbol
     @param _admin_addr Contract admin address
+    @param _admin_unlock_all Admin to enable Unlock-All feature (zero-address to disable forever)
+    @param _admin_early_unlock Admin to enable Eraly-Unlock feature (zero-address to disable forever)
     @param _max_time Locking max time
     """
 
@@ -176,6 +185,9 @@ def initialize(
 
     assert(_max_time >= WEEK), 'too short max lock period'
     self.MAXTIME = _max_time
+
+    self.admin_unlock_all = _admin_unlock_all
+    self.admin_early_unlock = _admin_early_unlock
 
 
 @external
@@ -257,10 +269,10 @@ def assert_not_contract(addr: address):
 def set_early_unlock(_early_unlock: bool):
     """
     @notice Sets the availability for users to unlock their locks before lock-end with penalty
-    @dev Only the admin can execute this function.
+    @dev Only the admin_early_unlock can execute this function.
     @param _early_unlock A boolean indicating whether early unlock is allowed or not.
     """
-    assert msg.sender == self.admin, '!admin'  # dev: admin only
+    assert msg.sender == self.admin_early_unlock, '!admin'  # dev: admin_early_unlock only
     assert _early_unlock != self.early_unlock, 'already'
     
     self.early_unlock = _early_unlock
@@ -273,9 +285,9 @@ def set_early_unlock_penalty_speed(_penalty_k: uint256):
     @notice Sets penalty speed for early unlocking
     @dev Only the admin can execute this function.
     @param _penalty_k Coefficient indicating the penalty speed for early unlock.
-                      Must be between 1 and 50, inclusive. Default 10.
+                      Must be between 0 and 50, inclusive. Default 10 - means linear speed.
     """
-    assert msg.sender == self.admin, '!admin'  # dev: admin only
+    assert msg.sender == self.admin_early_unlock, '!admin'  # dev: admin_early_unlock only
     assert _penalty_k <= 50, '!k'
    
     self.penalty_k = _penalty_k
@@ -286,10 +298,10 @@ def set_early_unlock_penalty_speed(_penalty_k: uint256):
 def set_penalty_treasury(_penalty_treasury: address):
     """
     @notice Sets penalty treasury address
-    @dev Only the admin can execute this function.
+    @dev Only the admin_early_unlock can execute this function.
     @param _penalty_treasury The address to collect early penalty (default admin address)
     """
-    assert msg.sender == self.admin, '!admin'  # dev: admin only
+    assert msg.sender == self.admin_early_unlock, '!admin'  # dev: admin_early_unlock only
     assert _penalty_treasury != empty(address), '!zero'
    
     self.penalty_treasury = _penalty_treasury
@@ -301,10 +313,9 @@ def set_all_unlock():
     """
     @notice Deactivates VotingEscrow and allows users to unlock their locks before lock-end. 
             New deposits will no longer be accepted.
-    @dev Only the admin can execute this function. Make sure there are no rewards for distribution in other contracts.
+    @dev Only the admin_unlock_all can execute this function. Make sure there are no rewards for distribution in other contracts.
     """
-    assert msg.sender == self.admin, '!admin'  # dev: admin only
-    
+    assert msg.sender == self.admin_unlock_all, '!admin'  # dev: admin_unlock_all only
     self.all_unlock = True
     log TotalUnlock(True)
 

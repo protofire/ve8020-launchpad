@@ -16,7 +16,9 @@ interface IVotingEscrow:
         _name: String[64],
         _symbol: String[32],
         _admin: address,
-        _maxLockTime: uint256
+        _admin_unlock_all: address,
+        _admin_early_unlock: address,
+        _maxLockTime: uint256,
     ): nonpayable
 
 interface IRewardDistributor:
@@ -64,6 +66,8 @@ def deploy(
     symbol: String[32],
     maxLockTime: uint256,
     rewardDistributorStartTime: uint256,
+    admin_unlock_all: address,
+    admin_early_unlock: address
 ) -> (address, address, address):
     """
     @notice Deploys new VotingEscrow, RewardDistributor and RewardFaucet contracts
@@ -72,6 +76,9 @@ def deploy(
     @param symbol The symbol for the new VotingEscrow contract
     @param maxLockTime A constraint for the maximum lock time in the new VotingEscrow contract
     @param rewardDistributorStartTime The start time for reward distribution
+    @param admin_unlock_all Admin address to enable unlock-all feature in VotingEscrow (zero-address to disable forever)
+    @param admin_early_unlock Admin address to enable eraly-unlock feature in VotingEscrow (zero-address to disable forever)
+
     """
     newVotingEscrow: address = create_minimal_proxy_to(votingEscrow)
     IVotingEscrow(newVotingEscrow).initialize(
@@ -79,6 +86,8 @@ def deploy(
         name,
         symbol,
         msg.sender,
+        admin_unlock_all,
+        admin_early_unlock,
         maxLockTime
     )
 

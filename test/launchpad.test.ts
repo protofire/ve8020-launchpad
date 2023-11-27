@@ -13,8 +13,8 @@ import {
 
 import {
   RewardDistributor,
-  Launchpad,
-  VotingEscrow,
+  // @ts-ignore
+  Launchpad, VotingEscrow,
   TestToken,
   BPTToken,
   RewardFaucet,
@@ -130,6 +130,8 @@ describe("Launchpad", function () {
         'initName',
         'initSymbol',
         user2Address,
+        constants.AddressZero,
+        constants.AddressZero,
         maxLockTime
       );
 
@@ -231,7 +233,9 @@ describe("Launchpad", function () {
         name,
         symbol,
         maxLockTime,
-        rewardStartTime
+        rewardStartTime,
+        constants.AddressZero,
+        constants.AddressZero
         )).to.be.reverted;
     });
 
@@ -243,7 +247,9 @@ describe("Launchpad", function () {
         name,
         symbol,
         maxLockTime,
-        rewardStartTime
+        rewardStartTime,
+        constants.AddressZero,
+        constants.AddressZero
         )).to.be.revertedWith('Cannot start before current week');
     });
 
@@ -255,7 +261,9 @@ describe("Launchpad", function () {
         name,
         symbol,
         maxLockTime,
-        rewardStartTime
+        rewardStartTime,
+        constants.AddressZero,
+        constants.AddressZero
         )).to.be.revertedWith('Zero total supply results in lost tokens');
     });
 
@@ -267,7 +275,9 @@ describe("Launchpad", function () {
         name,
         symbol,
         maxLockTime - 1,
-        rewardStartTime
+        rewardStartTime,
+        constants.AddressZero,
+        constants.AddressZero
         )).to.be.revertedWith('too short max lock period');
     });
   });
@@ -292,7 +302,9 @@ describe("Launchpad", function () {
         veName,
         veSymbol,
         maxLockTime,
-        rewardStartTime
+        rewardStartTime,
+        user2Address,
+        user1Address
       );
       txReceipt = await txResult.wait();
     });
@@ -349,6 +361,12 @@ describe("Launchpad", function () {
           .to.equal(bptToken.address);
       });
 
+      it('Should return correct admins for VotingEscrow', async () => {
+        expect(await votingEscrow.admin()).to.equal(creatorAddress);
+        expect(await votingEscrow.admin_unlock_all()).to.equal(user2Address);
+        expect(await votingEscrow.admin_early_unlock()).to.equal(user1Address);
+      });
+
       it('Should return non-zero initial point_history', async () => {
         const firstPH = await votingEscrow.point_history(0);
         expect(firstPH.blk).to.be.gt(3);
@@ -369,6 +387,8 @@ describe("Launchpad", function () {
           'newNameFail',
           'newSymbolFail',
           creatorAddress,
+          constants.AddressZero,
+          constants.AddressZero,
           maxLockTime
         ))
           .to.be.revertedWith('only once');

@@ -13,8 +13,8 @@ import {
 
 import {
   RewardDistributor,
-  Launchpad,
-  VotingEscrow,
+  // @ts-ignore
+  Launchpad, VotingEscrow,
   TestToken,
   BPTToken,
   SmartWalletWhitelist,
@@ -153,6 +153,8 @@ describe("Launchpad flow test 2 with multiple users", function () {
         'initName',
         'initSymbol',
         user2Address,
+        constants.AddressZero,
+        constants.AddressZero,
         maxLockTime
       );
 
@@ -221,7 +223,9 @@ describe("Launchpad flow test 2 with multiple users", function () {
         veName,
         veSymbol,
         maxLockTime,
-        rewardStartTime
+        rewardStartTime,
+        creatorAddress,
+        creatorAddress
       );
       txReceipt = await txResult.wait();
     });
@@ -289,6 +293,8 @@ describe("Launchpad flow test 2 with multiple users", function () {
           'newNameFail',
           'newSymbolFail',
           creatorAddress,
+          constants.AddressZero,
+          constants.AddressZero,
           maxLockTime
         ))
           .to.be.revertedWith('only once');
