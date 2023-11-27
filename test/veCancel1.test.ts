@@ -13,8 +13,8 @@ import {
 
 import {
   RewardDistributor,
-  Launchpad,
-  VotingEscrow,
+  // @ts-ignore
+  Launchpad, VotingEscrow,
   TestToken,
   BPTToken,
   SmartWalletWhitelist,
@@ -150,6 +150,8 @@ describe("Lock-cancel flow tests", function () {
         'initName',
         'initSymbol',
         user2Address,
+        constants.AddressZero,
+        constants.AddressZero,
         maxLockTime
       );
 
@@ -219,7 +221,9 @@ describe("Lock-cancel flow tests", function () {
         veName,
         veSymbol,
         maxLockTime,
-        rewardStartTime
+        rewardStartTime,
+        creatorAddress,
+        creatorAddress
       );
       txReceipt = await txResult.wait();
     });
@@ -296,6 +300,8 @@ describe("Lock-cancel flow tests", function () {
           bptToken.address,
           'newNameFail',
           'newSymbolFail',
+          creatorAddress,
+          creatorAddress,
           creatorAddress,
           maxLockTime
         ))

@@ -13,8 +13,8 @@ import {
 
 import {
   RewardDistributor,
-  Launchpad,
-  VotingEscrow,
+  // @ts-ignore
+  Launchpad, VotingEscrow,
   TestToken,
   BPTToken,
   SmartWalletWhitelist,
@@ -149,6 +149,8 @@ describe("RewardFaucet tests", function () {
         'initName',
         'initSymbol',
         user2Address,
+        constants.AddressZero,
+        constants.AddressZero,
         maxLockTime
       );
 
@@ -219,7 +221,9 @@ describe("RewardFaucet tests", function () {
         veName,
         veSymbol,
         maxLockTime,
-        rewardStartTime
+        rewardStartTime,
+        constants.AddressZero,
+        constants.AddressZero
       );
       txReceipt = await txResult.wait();
     });
