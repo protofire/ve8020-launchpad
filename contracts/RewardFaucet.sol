@@ -192,7 +192,7 @@ contract RewardFaucet is ReentrancyGuard {
         
         uint256 moveAmount = tokenWeekAmounts[token][pastWeekStart];
         tokenWeekAmounts[token][pastWeekStart] = 0;
-        tokenWeekAmounts[token][nextWeekStart] = moveAmount;
+        tokenWeekAmounts[token][nextWeekStart] += moveAmount;
 
         emit MovePastRewards(token, moveAmount, pastWeekStart, nextWeekStart);
     }

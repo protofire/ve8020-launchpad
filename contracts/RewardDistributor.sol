@@ -112,6 +112,8 @@ contract RewardDistributor is
         startTime = _roundDownTimestamp(startTime);
         uint256 currentWeek = _roundDownTimestamp(block.timestamp);
         require(startTime >= currentWeek, "Cannot start before current week");
+        require(startTime <= currentWeek + 10 weeks, "10 weeks delay max");
+
         if (startTime == currentWeek) {
             // We assume that `votingEscrow` has been deployed in a week previous to this one.
             // If `votingEscrow` did not have a non-zero supply at the beginning of the current week
