@@ -443,7 +443,7 @@ describe("Launchpad", function () {
         await expect(
           rewardDistributor.connect(creator)
             .depositToken(rewardToken.address, depositAmount)
-          ).to.be.revertedWith('token not allowed');
+          ).to.be.revertedWith('!allowed');
       });
 
       it(`Shouldn't allow to initialize RewardFaucet again`, async () => {

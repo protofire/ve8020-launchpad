@@ -102,8 +102,6 @@ event Supply:
 WEEK: constant(uint256) = 7 * 86400  # all future times are rounded by week
 MAXTIME: public(uint256)
 MULTIPLIER: constant(uint256) = 10**18
-PENALTY_MULTIPLIER: constant(uint256) = 10
-PENALTY_DENOMINATOR: constant(uint256) = 10
 
 TOKEN: public(address)
 
@@ -137,6 +135,11 @@ is_initialized: public(bool)
 
 early_unlock: public(bool)
 penalty_k: public(uint256)
+prev_penalty_k: public(uint256)
+penalty_upd_ts: public(uint256)
+PENALTY_COOLDOWN: constant(uint256) = 60 # cooldown to prevent font-run on penalty change
+PENALTY_MULTIPLIER: constant(uint256) = 10
+
 penalty_treasury: public(address)
 
 all_unlock: public(bool)
@@ -166,10 +169,12 @@ def initialize(
     assert(not self.is_initialized), 'only once'
     self.is_initialized = True
 
-    assert(_admin_addr != empty(address)), 'empty admin'
+    assert(_admin_addr != empty(address)), '!empty'
     self.admin = _admin_addr
 
     self.penalty_k = 10
+    self.prev_penalty_k = 10
+    self.penalty_upd_ts = block.timestamp
     self.penalty_treasury = _admin_addr
 
     self.TOKEN = _token_addr
@@ -283,14 +288,18 @@ def set_early_unlock(_early_unlock: bool):
 def set_early_unlock_penalty_speed(_penalty_k: uint256):
     """
     @notice Sets penalty speed for early unlocking
-    @dev Only the admin can execute this function.
+    @dev Only the admin can execute this function. To prevent frontrunning we use PENALTY_COOLDOWN period
     @param _penalty_k Coefficient indicating the penalty speed for early unlock.
                       Must be between 0 and 50, inclusive. Default 10 - means linear speed.
     """
     assert msg.sender == self.admin_early_unlock, '!admin'  # dev: admin_early_unlock only
     assert _penalty_k <= 50, '!k'
-   
+    assert block.timestamp > self.penalty_upd_ts + PENALTY_COOLDOWN, 'early' # to avoid frontrun
+
+    self.prev_penalty_k = self.penalty_k
     self.penalty_k = _penalty_k
+    self.penalty_upd_ts = block.timestamp
+
     log PenaltySpeed(_penalty_k)
 
 
@@ -645,7 +654,15 @@ def withdraw_early():
     value: uint256 = convert(_locked.amount, uint256)
 
     time_left: uint256 = _locked.end - block.timestamp
-    penalty_ratio: uint256 = (MULTIPLIER * time_left / self.MAXTIME) * (PENALTY_MULTIPLIER * self.penalty_k / PENALTY_DENOMINATOR)
+    
+    # to avoid front-run with penalty_k
+    penalty_k_: uint256 = 0
+    if block.timestamp > self.penalty_upd_ts + PENALTY_COOLDOWN:
+        penalty_k_ = self.penalty_k
+    else:
+        penalty_k_ = self.prev_penalty_k
+
+    penalty_ratio: uint256 = (time_left * MULTIPLIER / self.MAXTIME) * penalty_k_
     penalty: uint256 = (value * penalty_ratio / MULTIPLIER) / PENALTY_MULTIPLIER    
     if penalty > value:
         penalty = value

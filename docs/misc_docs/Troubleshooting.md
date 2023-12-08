@@ -58,8 +58,8 @@ This error means that you cannot withdraw your funds before the lock period expi
 - `Reward distribution has not started yet`  
 This error means that the reward distribution has not yet begun. For a new contract, you can check the start time of the distribution by calling the getTimeCursor() function.
 
-- `token not allowed`  
-This error means that the token you want to deposit for reward distribution is not allowed by the contract administrator (owner) of the contract. The contract administrator must first allow the token for distribution by calling the addAllowedRewardTokens(tokens[]) function.
+- `!allowed`  
+This error means that the token you want to deposit (or claim) for reward distribution is not allowed by the contract administrator (owner) of the contract. The contract administrator must first allow the token for distribution by calling the addAllowedRewardTokens(tokens[]) function.
 
 - `Zero total supply results in lost tokens`  
 This error occurs when you want to start reward distribution for the current week, but there have been no locks made in the VotingEscrow contract yet. It is recommended to postpone the start date of the reward distribution to the next week.

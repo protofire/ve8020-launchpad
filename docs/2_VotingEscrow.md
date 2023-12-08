@@ -74,7 +74,8 @@ Allows users to withdraw their funds before the lockup period ends. Users are pe
   Tleft - left time to unlock
   Tmax - MAXLOCK time
   Penalty amount = L * k * (Tlast / Tmax)
-```
+```  
+To prevent front-run attack (from VotingEscrow admin) the delay of 60 seconds is used, before new penalty speed is enabled.  
 
 To enable unlock with penalties the function `set_early_unlock(true)` must be called:
 ```sh
@@ -91,7 +92,8 @@ function set_early_unlock_penalty_speed(uint256 _penalty_k) external;
 ```  
 Parameters:  
 `_penalty_k` - Coefficient indicating the penalty speed for early unlock. Must be between 0 and 50, inclusive. Default 10.  
-This function provides a dynamic way for the admin to control how quickly penalties increase for early unlocking. The `_penalty_k` coefficient determines the rate at which penalties accumulate based on the remaining time until the lock-end. Since the `PENALTY_DENOMINATOR = 10` values below 10 will decrease penalty rate, and values above 10 will increase penalty rate. In case when `_penalty_k = 10` the `k` value of the formula above is equal 1.
+This function provides a dynamic way for the admin to control how quickly penalties increase for early unlocking. The `_penalty_k` coefficient determines the rate at which penalties accumulate based on the remaining time until the lock-end. Since the `PENALTY_DENOMINATOR = 10` values below 10 will decrease penalty rate, and values above 10 will increase penalty rate. In case when `_penalty_k = 10` the `k` value of the formula above is equal 1.  
+To prevent front-run attack (from VotingEscrow admin) the delay of 60 seconds is used, before new penalty speed is set.  
 
 
 To withdraw early with penalty:  
