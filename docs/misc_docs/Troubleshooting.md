@@ -13,8 +13,8 @@ The `zero address` error indicates that during the deployment of the Launchpad c
 ### Deployment of New VotingEscrow and RewardDistributor Contract Systems
 When creating new contracts, it is crucial to provide the correct address of the BPT token (or similar token), which should adhere to the ERC20 interface. Otherwise, the transaction will fail.  
 
-- `too short max lock period`
-The `too short max lock period` error means that an excessively short interval has been set for the maximum token lock duration. Increase the value (for example, specify `2592000` for a maximum lock period of 30 days). Note that the value is set in seconds.  
+- `!maxlock`
+The `!maxlock` error means that an excessively short (or long) interval has been set for the maximum token lock duration. Increase the value (for example, specify `2592000` for a maximum lock period of 30 days). Note that the value is set in seconds.  
 
 
 - `only once` error  

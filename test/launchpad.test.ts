@@ -295,7 +295,7 @@ describe("Launchpad", function () {
         rewardStartTime,
         constants.AddressZero,
         constants.AddressZero
-        )).to.be.revertedWith('too short max lock period');
+        )).to.be.revertedWith('!maxlock');
     });
   });
 

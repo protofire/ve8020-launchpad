@@ -182,13 +182,13 @@ def initialize(
     self.point_history[0].ts = block.timestamp
 
     _decimals: uint256 = ERC20(_token_addr).decimals()  # also validates token for non-zero
-    assert _decimals <= 255
+    assert (_decimals >= 6 and _decimals <= 255), '!decimals'
 
     self.NAME = _name
     self.SYMBOL = _symbol
     self.DECIMALS = _decimals
 
-    assert(_max_time >= WEEK), 'too short max lock period'
+    assert(_max_time >= WEEK and _max_time <= WEEK * 52 * 5), '!maxlock'
     self.MAXTIME = _max_time
 
     self.admin_unlock_all = _admin_unlock_all
