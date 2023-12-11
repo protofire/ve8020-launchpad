@@ -530,11 +530,15 @@ contract RewardDistributor is
         mapping(uint256 => uint256) storage tokensPerWeek = _tokensPerWeek[
             token
         ];
-        require(tokensPerWeek[firstIncompleteWeek] + newTokensToDistribute <= type(uint128).max, "exceed max128");
 
         for (uint256 i = 0; i < 20; ++i) {
             // This is safe as we're incrementing a timestamp.
             nextWeek = firstIncompleteWeek + 1 weeks;
+            require(
+                tokensPerWeek[firstIncompleteWeek].add(newTokensToDistribute) <= type(uint128).max,
+                "exceed max128"
+            );
+
             if (block.timestamp < nextWeek) {
                 // `firstIncompleteWeek` is now the beginning of the current week, i.e. this is the final iteration.
                 if (
@@ -719,7 +723,7 @@ contract RewardDistributor is
         uint256 weekStart = _roundDownTimestamp(block.timestamp);
 
         // We expect `timeCursor == weekStart + 1 weeks` when fully up to date.
-        if (nextWeekToCheckpoint > weekStart) {
+        if (nextWeekToCheckpoint > weekStart || weekStart == block.timestamp) {
             // We've already checkpointed up to this week so perform early return
             return;
         }
