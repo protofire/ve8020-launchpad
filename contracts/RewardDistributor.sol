@@ -112,6 +112,8 @@ contract RewardDistributor is
         startTime = _roundDownTimestamp(startTime);
         uint256 currentWeek = _roundDownTimestamp(block.timestamp);
         require(startTime >= currentWeek, "Cannot start before current week");
+        require(startTime <= currentWeek + 10 weeks, "10 weeks delay max");
+
         if (startTime == currentWeek) {
             // We assume that `votingEscrow` has been deployed in a week previous to this one.
             // If `votingEscrow` did not have a non-zero supply at the beginning of the current week
@@ -239,7 +241,7 @@ contract RewardDistributor is
         IERC20 token,
         uint256 amount
     ) external override nonReentrant {
-        require(allowedRewardTokens[address(token)], "token not allowed");
+        require(allowedRewardTokens[address(token)], "!allowed");
         _checkpointToken(token, false);
         token.safeTransferFrom(msg.sender, address(this), amount);
         _checkpointToken(token, true);
@@ -260,7 +262,7 @@ contract RewardDistributor is
         IERC20 token,
         uint256 amount
     ) external {
-        require(allowedRewardTokens[address(token)], "token not allowed");
+        require(allowedRewardTokens[address(token)], "!allowed");
         require(msg.sender == address(rewardFaucet), "only faucet");
         _checkpointToken(token, false);
         token.safeTransferFrom(msg.sender, address(this), amount);
@@ -282,7 +284,7 @@ contract RewardDistributor is
 
         uint256 length = tokens.length;
         for (uint256 i = 0; i < length; ++i) {
-            require(allowedRewardTokens[address(tokens[i])], "token not allowed");
+            require(allowedRewardTokens[address(tokens[i])], "!allowed");
             _checkpointToken(tokens[i], false);
             tokens[i].safeTransferFrom(msg.sender, address(this), amounts[i]);
             _checkpointToken(tokens[i], true);
@@ -318,6 +320,7 @@ contract RewardDistributor is
      * @param token - The ERC20 token address to be checkpointed.
      */
     function checkpointToken(IERC20 token) external override nonReentrant {
+        require(allowedRewardTokens[address(token)], "!allowed");
         _checkpointToken(token, true);
     }
 
@@ -332,6 +335,7 @@ contract RewardDistributor is
     ) external override nonReentrant {
         uint256 tokensLength = tokens.length;
         for (uint256 i = 0; i < tokensLength; ++i) {
+            require(allowedRewardTokens[address(tokens[i])], "!allowed");
             _checkpointToken(tokens[i], true);
         }
     }
@@ -356,6 +360,7 @@ contract RewardDistributor is
         optionalOnlyCaller(user)
         returns (uint256)
     {
+        require(allowedRewardTokens[address(token)], "!allowed");
         _checkpointTotalSupply();
         _checkpointUserBalance(user);
         _checkpointToken(token, false);
@@ -391,6 +396,7 @@ contract RewardDistributor is
         uint256 tokensLength = tokens.length;
         uint256[] memory amounts = new uint256[](tokensLength);
         for (uint256 i = 0; i < tokensLength; ++i) {
+            require(allowedRewardTokens[address(tokens[i])], "!allowed");
             _checkpointToken(tokens[i], false);
             amounts[i] = _claimToken(user, tokens[i]);
             rewardFaucet.distributePastRewards(address(tokens[i]));
@@ -524,9 +530,15 @@ contract RewardDistributor is
         mapping(uint256 => uint256) storage tokensPerWeek = _tokensPerWeek[
             token
         ];
+
         for (uint256 i = 0; i < 20; ++i) {
             // This is safe as we're incrementing a timestamp.
             nextWeek = firstIncompleteWeek + 1 weeks;
+            require(
+                tokensPerWeek[firstIncompleteWeek].add(newTokensToDistribute) <= type(uint128).max,
+                "exceed max128"
+            );
+
             if (block.timestamp < nextWeek) {
                 // `firstIncompleteWeek` is now the beginning of the current week, i.e. this is the final iteration.
                 if (

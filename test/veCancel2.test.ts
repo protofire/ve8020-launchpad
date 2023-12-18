@@ -155,7 +155,7 @@ describe("Lock-cancel unit tests", function () {
         maxLockTime
       );
 
-      const startTime = (await time.latest()) + 99999999999;
+      const startTime = (await time.latest()) + WEEK * 3;
       await rewardDistributorImpl.initialize(
         votingEscrowImpl.address,
         rewardFaucetImpl.address,
@@ -264,17 +264,31 @@ describe("Lock-cancel unit tests", function () {
 
       it('Should return correct initial states penalty_k', async () => {
         expect(await votingEscrow.penalty_k()).to.equal(10);
+        expect(await votingEscrow.prev_penalty_k()).to.equal(10);
+
       });
 
-      it(`Should change penalty speed by admin`, async () => {
+      it(`Should not be possible to change penalty before cool-down expired`, async () => {
         const penaltyDefault = 10;
         const penaltyNew = 45;
         
+        await expect(votingEscrow.connect(creator).set_early_unlock_penalty_speed(penaltyNew))
+          .to.be.revertedWith('early');
+      });
+
+      it(`Should change penalty speed by admin after cool down period finished`, async () => {
+        const penaltyDefault = 10;
+        const penaltyNew = 45;
+        const penaltyBefore = await votingEscrow.penalty_k();
+        await time.increase(61);
         await votingEscrow.connect(creator).set_early_unlock_penalty_speed(penaltyNew);
         expect(await votingEscrow.penalty_k()).to.equal(penaltyNew);
+        expect(await votingEscrow.prev_penalty_k()).to.equal(penaltyBefore);
 
+        await time.increase(61);
         await votingEscrow.connect(creator).set_early_unlock_penalty_speed(penaltyDefault);
         expect(await votingEscrow.penalty_k()).to.equal(penaltyDefault);
+        expect(await votingEscrow.prev_penalty_k()).to.equal(penaltyNew);
       });
 
       it(`Shouldn't allow to call set_early_unlock() for non-admin`, async () => {
@@ -424,6 +438,7 @@ describe("Lock-cancel unit tests", function () {
             before(async () => {
               await time.increase(DAY);
               await votingEscrow.connect(creator).set_early_unlock_penalty_speed(0);
+              await time.increase(61);
 
               createLockTime = await time.latest();
               await votingEscrow.connect(user2).withdraw_early();

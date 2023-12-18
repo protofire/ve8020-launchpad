@@ -47,6 +47,9 @@ let rewardFaucetImpl: RewardFaucet;
 let launchpadFactory: ContractFactory;
 let launchpad: Launchpad;
 
+let DAY: number = 60 * 60 * 24;
+let WEEK: number = 60 * 60 * 24 * 7;
+
 describe("Launchpad", function () {
 
   before(async () => {
@@ -135,7 +138,7 @@ describe("Launchpad", function () {
         maxLockTime
       );
 
-      const startTime = (await time.latest()) + 99999999999;
+      const startTime = (await time.latest()) + WEEK * 3;
       await rewardDistributorImpl.initialize(
         votingEscrowImpl.address,
         rewardFaucetImpl.address,
@@ -267,7 +270,21 @@ describe("Launchpad", function () {
         )).to.be.revertedWith('Zero total supply results in lost tokens');
     });
 
-    it('Should fail to create VE-System with low maxLockTime)', async () => {
+    it('Should fail to create VE-System with incorrect reward startTime (mare then 10 weeks)', async () => {
+      let rewardStartTime = (await time.latest()) + WEEK * 12;
+      
+      await expect(launchpad.deploy(
+        bptToken.address,
+        name,
+        symbol,
+        maxLockTime,
+        rewardStartTime,
+        constants.AddressZero,
+        constants.AddressZero
+        )).to.be.revertedWith('10 weeks delay max');
+    });
+
+    it('Should fail to create VE-System with low maxLockTime', async () => {
       let rewardStartTime = (await time.latest()) + 100000000;
       
       await expect(launchpad.deploy(
@@ -278,7 +295,7 @@ describe("Launchpad", function () {
         rewardStartTime,
         constants.AddressZero,
         constants.AddressZero
-        )).to.be.revertedWith('too short max lock period');
+        )).to.be.revertedWith('!maxlock');
     });
   });
 
@@ -296,7 +313,7 @@ describe("Launchpad", function () {
     let maxLockTime: number = 60 * 60 * 24 * 365; // year
 
     before(async () => {
-      rewardStartTime = (await time.latest()) + 10000000;
+      rewardStartTime = (await time.latest()) + WEEK;
       txResult = await launchpad.connect(creator).deploy(
         bptToken.address,
         veName,
@@ -426,7 +443,7 @@ describe("Launchpad", function () {
         await expect(
           rewardDistributor.connect(creator)
             .depositToken(rewardToken.address, depositAmount)
-          ).to.be.revertedWith('token not allowed');
+          ).to.be.revertedWith('!allowed');
       });
 
       it(`Shouldn't allow to initialize RewardFaucet again`, async () => {

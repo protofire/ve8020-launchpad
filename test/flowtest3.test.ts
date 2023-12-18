@@ -162,7 +162,7 @@ describe("Launchpad flow test 3 with multiple rewards", function () {
         maxLockTime
       );
 
-      const startTime = (await time.latest()) + 99999999999;
+      const startTime = (await time.latest()) + WEEK * 3;
       await rewardDistributorImpl.initialize(
         votingEscrowImpl.address,
         rewardFaucetImpl.address,

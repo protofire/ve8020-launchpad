@@ -186,13 +186,13 @@ contract RewardFaucet is ReentrancyGuard {
     */
     function movePastRewards(address token, uint256 pastWeekTimestamp) external {
         uint256 pastWeekStart = _roundDownTimestamp(pastWeekTimestamp);
-        require(pastWeekStart < _roundDownTimestamp(block.timestamp) - 10 weeks, '!outdate');
+        require(pastWeekStart < _roundDownTimestamp(block.timestamp) - 9 weeks, '!outdate');
         
         uint256 nextWeekStart = _roundUpTimestamp(block.timestamp);
         
         uint256 moveAmount = tokenWeekAmounts[token][pastWeekStart];
         tokenWeekAmounts[token][pastWeekStart] = 0;
-        tokenWeekAmounts[token][nextWeekStart] = moveAmount;
+        tokenWeekAmounts[token][nextWeekStart] += moveAmount;
 
         emit MovePastRewards(token, moveAmount, pastWeekStart, nextWeekStart);
     }
