@@ -520,7 +520,6 @@ contract RewardDistributor is
             tokenBalance <= type(uint128).max,
             "Maximum token balance exceeded"
         );
-        tokenState.cachedBalance = uint128(tokenBalance);
 
         uint256 firstIncompleteWeek = _roundDownTimestamp(lastTokenTime);
         uint256 nextWeek = 0;
@@ -531,13 +530,10 @@ contract RewardDistributor is
             token
         ];
 
+        uint256 amountToAdd;
         for (uint256 i = 0; i < 20; ++i) {
             // This is safe as we're incrementing a timestamp.
             nextWeek = firstIncompleteWeek + 1 weeks;
-            require(
-                tokensPerWeek[firstIncompleteWeek].add(newTokensToDistribute) <= type(uint128).max,
-                "exceed max128"
-            );
 
             if (block.timestamp < nextWeek) {
                 // `firstIncompleteWeek` is now the beginning of the current week, i.e. this is the final iteration.
@@ -545,13 +541,18 @@ contract RewardDistributor is
                     timeSinceLastCheckpoint == 0 &&
                     block.timestamp == lastTokenTime
                 ) {
-                    tokensPerWeek[firstIncompleteWeek] += newTokensToDistribute;
+                    amountToAdd = newTokensToDistribute;
                 } else {
                     // block.timestamp >= lastTokenTime by definition.
-                    tokensPerWeek[firstIncompleteWeek] +=
+                    amountToAdd = 
                         (newTokensToDistribute *
                             (block.timestamp - lastTokenTime)) /
                         timeSinceLastCheckpoint;
+                }
+
+                if (tokensPerWeek[firstIncompleteWeek].add(amountToAdd) <= type(uint128).max) {
+                    tokensPerWeek[firstIncompleteWeek] += amountToAdd;
+                    tokenState.cachedBalance += uint128(amountToAdd);
                 }
                 // As we've caught up to the present then we should now break.
                 break;
@@ -559,13 +560,17 @@ contract RewardDistributor is
                 // We've gone a full week or more without checkpointing so need to distribute tokens to previous weeks.
                 if (timeSinceLastCheckpoint == 0 && nextWeek == lastTokenTime) {
                     // It shouldn't be possible to enter this block
-                    tokensPerWeek[firstIncompleteWeek] += newTokensToDistribute;
+                    amountToAdd = newTokensToDistribute;
                 } else {
                     // nextWeek > lastTokenTime by definition.
-                    tokensPerWeek[firstIncompleteWeek] +=
-                        (newTokensToDistribute * (nextWeek - lastTokenTime)) /
+                    amountToAdd = (newTokensToDistribute * (nextWeek - lastTokenTime)) /
                         timeSinceLastCheckpoint;
                 }
+            }
+
+            if (tokensPerWeek[firstIncompleteWeek].add(amountToAdd) <= type(uint128).max) {
+                tokensPerWeek[firstIncompleteWeek] += amountToAdd;
+                tokenState.cachedBalance += uint128(amountToAdd);
             }
 
             // We've now "checkpointed" up to the beginning of next week so must update timestamps appropriately.
