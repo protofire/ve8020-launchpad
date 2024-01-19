@@ -41,6 +41,7 @@ interface ERC20:
     def decimals() -> uint256: view
     def name() -> String[64]: view
     def symbol() -> String[32]: view
+    def balanceOf(account: address) -> uint256: view
     def transfer(to: address, amount: uint256) -> bool: nonpayable
     def transferFrom(spender: address, to: address, amount: uint256) -> bool: nonpayable
 
@@ -52,6 +53,10 @@ interface ERC20:
 # for individual wallet addresses
 interface SmartWalletChecker:
     def check(addr: address) -> bool: nonpayable
+
+
+interface BalancerMinter:
+    def mint(gauge: address) -> uint256: nonpayable
 
 DEPOSIT_FOR_TYPE: constant(int128) = 0
 CREATE_LOCK_TYPE: constant(int128) = 1
@@ -76,6 +81,9 @@ event PenaltyTreasury:
 
 event TotalUnlock:
     status: bool
+
+event RewardReceiver:
+    newReceiver: address
 
 event Deposit:
     provider: indexed(address)
@@ -142,6 +150,12 @@ PENALTY_MULTIPLIER: constant(uint256) = 10
 
 penalty_treasury: public(address)
 
+balMinter: public(address)
+balToken: public(address)
+rewardReceiver: public(address)
+rewardReceiverChangeable: public(bool)
+
+
 all_unlock: public(bool)
 
 
@@ -153,7 +167,11 @@ def initialize(
     _admin_addr: address,
     _admin_unlock_all: address,
     _admin_early_unlock: address,
-    _max_time: uint256
+    _max_time: uint256,
+    _balToken: address,
+    _balMinter: address,
+    _rewardReceiver: address,
+    _rewardReceiverChangeable: bool
 ):
     """
     @notice Contract constructor
@@ -164,6 +182,10 @@ def initialize(
     @param _admin_unlock_all Admin to enable Unlock-All feature (zero-address to disable forever)
     @param _admin_early_unlock Admin to enable Eraly-Unlock feature (zero-address to disable forever)
     @param _max_time Locking max time
+    @param _balToken Address of the Balancer token
+    @param _balMinter Address of the Balancer minter
+    @param _rewardReceiver Address of the reward receiver
+    @param _rewardReceiverChangeable Boolean indicating whether the reward receiver is changeable
     """
 
     assert(not self.is_initialized), 'only once'
@@ -193,6 +215,11 @@ def initialize(
 
     self.admin_unlock_all = _admin_unlock_all
     self.admin_early_unlock = _admin_early_unlock
+
+    self.balToken = _balToken
+    self.balMinter = _balMinter
+    self.rewardReceiver = _rewardReceiver
+    self.rewardReceiverChangeable = _rewardReceiverChangeable
 
 
 @external
@@ -928,3 +955,25 @@ def totalSupplyAt(_block: uint256) -> uint256:
     # Now dt contains info on how far are we beyond point
 
     return self.supply_at(point, point.ts + dt)
+
+@external
+@nonreentrant("lock")
+def claimExternalRewards():
+    """
+    @notice Claims BAL rewards
+    @dev Only possible if the TOKEN is Guage contract
+    """
+    BalancerMinter(self.balMinter).mint(self.TOKEN)
+    balBalance: uint256 = ERC20(self.balToken).balanceOf(self)
+    if balBalance > 0:
+        ERC20(self.balToken).transfer(self.rewardReceiver, balBalance)
+
+@external
+def changeRewadReceiver(newReceiver: address):
+    """
+    @notice Changes the reward receiver address
+    @param newReceiver New address to set as the reward receiver
+    """
+    assert (self.rewardReceiverChangeable), '!available' 
+    self.rewardReceiver = newReceiver
+    log RewardReceiver(newReceiver)
