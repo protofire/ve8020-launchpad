@@ -11,11 +11,20 @@ async function main() {
   const rewardDistributorImpl = await deployAndVerify('RewardDistributor', []);
   const rewardFaucetImpl = await deployAndVerify('RewardFaucet', []);
 
+  // @todo
+  const balToken = "0xba665c75fb0AdedEa6e24Fa25A28F77d38C009a8";
+  const balMinter = "0x28af2Ef4f71Cd5EA47a61Ea81932E4Df4dC790A6";
   
   // deploying launchpad
   const launchpad = await deployAndVerify(
     'Launchpad',
-    [votingEscrowImpl.address, rewardDistributorImpl.address, rewardFaucetImpl.address]
+    [
+      votingEscrowImpl.address,
+      rewardDistributorImpl.address,
+      rewardFaucetImpl.address,
+      balToken,
+      balMinter
+    ]
   )
 
   console.log('The VotingEscrow Implementation deployed at:', votingEscrowImpl.address);
@@ -25,7 +34,7 @@ async function main() {
   console.log('The Launchpad deployed at:', launchpad.address);
 
   const abi = [
-    'constructor(address,address,address)',
+    'constructor(address,address,address,address,address)',
   ];
   const contract = new ethers.utils.Interface(abi);
   const encodedArguments = contract.encodeDeploy(
@@ -33,6 +42,8 @@ async function main() {
       votingEscrowImpl.address,
       rewardDistributorImpl.address,
       rewardFaucetImpl.address,
+      balToken,
+      balMinter
     ]
   );
 
