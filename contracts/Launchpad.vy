@@ -24,7 +24,8 @@ interface IVotingEscrow:
         _balToken: address,
         _balMinter: address,
         _rewardReceiver: address,
-        _rewardReceiverChangeable: bool
+        _rewardReceiverChangeable: bool,
+        _rewardDistributor: address
     ): nonpayable
 
 interface IRewardDistributor:
@@ -115,7 +116,8 @@ def deploy(
         balToken,
         balMinter,
         rewardReceiver_,
-        rewardReceiverChangeable
+        rewardReceiverChangeable,
+        newRewardDistributor
     )
 
     newRewardFaucet: address = create_minimal_proxy_to(rewardFaucet)

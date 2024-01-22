@@ -18,6 +18,8 @@ import {
   TestToken,
   BPTToken,
   RewardFaucet,
+  BalancerToken,
+  BalancerMinter,
 } from "../typechain-types";
 
 
@@ -47,6 +49,9 @@ let rewardFaucetImpl: RewardFaucet;
 let launchpadFactory: ContractFactory;
 let launchpad: Launchpad;
 
+let balToken: BalancerToken;
+let balMinter: BalancerMinter;
+
 let DAY: number = 60 * 60 * 24;
 let WEEK: number = 60 * 60 * 24 * 7;
 
@@ -75,6 +80,12 @@ describe("Launchpad", function () {
 
     rewardFaucetFactory = await ethers.getContractFactory('RewardFaucet');
     rewardFaucetImpl = (await rewardFaucetFactory.deploy()) as RewardFaucet;
+
+    const balFactory = await ethers.getContractFactory('BalancerToken');
+    balToken = (await balFactory.deploy()) as BalancerToken;
+
+    const balMinterFactory = await ethers.getContractFactory('BalancerMinter');
+    balMinter = (await balMinterFactory.deploy(balToken.address)) as BalancerMinter;
 
     await rewardToken.mint(creatorAddress, utils.parseEther("2000"));
   });
@@ -135,7 +146,12 @@ describe("Launchpad", function () {
         user2Address,
         constants.AddressZero,
         constants.AddressZero,
-        maxLockTime
+        maxLockTime,
+        constants.AddressZero,
+        constants.AddressZero,
+        constants.AddressZero,
+        false,
+        constants.AddressZero,
       );
 
       const startTime = (await time.latest()) + WEEK * 3;
@@ -173,7 +189,9 @@ describe("Launchpad", function () {
       await expect(launchpadFactory.deploy(
         constants.AddressZero,
         rewardDistributorImpl.address,
-        rewardFaucetImpl.address
+        rewardFaucetImpl.address,
+        balToken.address,
+        balMinter.address
         )).to.be.revertedWith('zero address');
     });
 
@@ -183,7 +201,9 @@ describe("Launchpad", function () {
       await expect(launchpadFactory.deploy(
         votingEscrowImpl.address,
         constants.AddressZero,
-        rewardFaucetImpl.address
+        rewardFaucetImpl.address,
+        balToken.address,
+        balMinter.address
         )).to.be.revertedWith('zero address');
     });
 
@@ -193,6 +213,32 @@ describe("Launchpad", function () {
       await expect(launchpadFactory.deploy(
         votingEscrowImpl.address,
         rewardDistributorImpl.address,
+        constants.AddressZero,
+        balToken.address,
+        balMinter.address
+        )).to.be.revertedWith('zero address');
+    });
+
+    it('Should not be unable to deploy launchpad with zero BAL token address', async () => {
+      launchpadFactory = await ethers.getContractFactory('Launchpad');
+
+      await expect(launchpadFactory.deploy(
+        votingEscrowImpl.address,
+        rewardDistributorImpl.address,
+        rewardFaucetImpl.address,
+        constants.AddressZero,
+        balMinter.address
+        )).to.be.revertedWith('zero address');
+    });
+
+    it('Should not be unable to deploy launchpad with zero BalancerMinter address', async () => {
+      launchpadFactory = await ethers.getContractFactory('Launchpad');
+
+      await expect(launchpadFactory.deploy(
+        votingEscrowImpl.address,
+        rewardDistributorImpl.address,
+        rewardFaucetImpl.address,
+        balToken.address,
         constants.AddressZero
         )).to.be.revertedWith('zero address');
     });
@@ -204,7 +250,9 @@ describe("Launchpad", function () {
       launchpad = (await launchpadFactory.deploy(
         votingEscrowImpl.address,
         rewardDistributorImpl.address,
-        rewardFaucetImpl.address
+        rewardFaucetImpl.address,
+        balToken.address,
+        balMinter.address
         )) as Launchpad;
     });
     
@@ -222,6 +270,14 @@ describe("Launchpad", function () {
       expect(await launchpad.rewardFaucet())
         .to.equal(rewardFaucetImpl.address);
     });
+
+    it('Should set correct balToken and BalancerMinter addresses', async () => {
+      expect(await launchpad.balToken())
+        .to.equal(balToken.address);
+
+      expect(await launchpad.balMinter())
+        .to.equal(balMinter.address);
+    });
   });
 
   describe('Deploy VE system constraints', function () {
@@ -238,6 +294,7 @@ describe("Launchpad", function () {
         maxLockTime,
         rewardStartTime,
         constants.AddressZero,
+        constants.AddressZero,
         constants.AddressZero
         )).to.be.reverted;
     });
@@ -251,6 +308,7 @@ describe("Launchpad", function () {
         symbol,
         maxLockTime,
         rewardStartTime,
+        constants.AddressZero,
         constants.AddressZero,
         constants.AddressZero
         )).to.be.revertedWith('Cannot start before current week');
@@ -266,6 +324,7 @@ describe("Launchpad", function () {
         maxLockTime,
         rewardStartTime,
         constants.AddressZero,
+        constants.AddressZero,
         constants.AddressZero
         )).to.be.revertedWith('Zero total supply results in lost tokens');
     });
@@ -280,6 +339,7 @@ describe("Launchpad", function () {
         maxLockTime,
         rewardStartTime,
         constants.AddressZero,
+        constants.AddressZero,
         constants.AddressZero
         )).to.be.revertedWith('10 weeks delay max');
     });
@@ -293,6 +353,7 @@ describe("Launchpad", function () {
         symbol,
         maxLockTime - 1,
         rewardStartTime,
+        constants.AddressZero,
         constants.AddressZero,
         constants.AddressZero
         )).to.be.revertedWith('!maxlock');
@@ -321,7 +382,8 @@ describe("Launchpad", function () {
         maxLockTime,
         rewardStartTime,
         user2Address,
-        user1Address
+        user1Address,
+        creatorAddress
       );
       txReceipt = await txResult.wait();
     });
@@ -384,6 +446,20 @@ describe("Launchpad", function () {
         expect(await votingEscrow.admin_early_unlock()).to.equal(user1Address);
       });
 
+      it('Should return BAL properties of VotingEscrow', async () => {
+        expect(await votingEscrow.balMinter())
+          .to.equal(balMinter.address);
+
+        expect(await votingEscrow.balToken())
+          .to.equal(balToken.address);
+
+        expect(await votingEscrow.rewardReceiver())
+          .to.equal(creatorAddress);
+
+        expect(await votingEscrow.rewardReceiverChangeable())
+          .to.equal(true);
+      });
+
       it('Should return non-zero initial point_history', async () => {
         const firstPH = await votingEscrow.point_history(0);
         expect(firstPH.blk).to.be.gt(3);
@@ -406,7 +482,12 @@ describe("Launchpad", function () {
           creatorAddress,
           constants.AddressZero,
           constants.AddressZero,
-          maxLockTime
+          maxLockTime,
+          balToken.address,
+          balMinter.address,
+          creatorAddress,
+          true,
+          constants.AddressZero,
         ))
           .to.be.revertedWith('only once');
       });

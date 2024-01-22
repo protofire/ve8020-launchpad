@@ -54,9 +54,11 @@ interface ERC20:
 interface SmartWalletChecker:
     def check(addr: address) -> bool: nonpayable
 
-
 interface BalancerMinter:
     def mint(gauge: address) -> uint256: nonpayable
+
+interface RewardDistributor:
+    def depositToken(token: address, amount: uint256): nonpayable
 
 DEPOSIT_FOR_TYPE: constant(int128) = 0
 CREATE_LOCK_TYPE: constant(int128) = 1
@@ -155,6 +157,7 @@ balToken: public(address)
 rewardReceiver: public(address)
 rewardReceiverChangeable: public(bool)
 
+rewardDistributor: public(address)
 
 all_unlock: public(bool)
 
@@ -171,7 +174,8 @@ def initialize(
     _balToken: address,
     _balMinter: address,
     _rewardReceiver: address,
-    _rewardReceiverChangeable: bool
+    _rewardReceiverChangeable: bool,
+    _rewardDistributor: address
 ):
     """
     @notice Contract constructor
@@ -186,6 +190,7 @@ def initialize(
     @param _balMinter Address of the Balancer minter
     @param _rewardReceiver Address of the reward receiver
     @param _rewardReceiverChangeable Boolean indicating whether the reward receiver is changeable
+    @param _rewardDistributor The RewardDistributor contract address
     """
 
     assert(not self.is_initialized), 'only once'
@@ -220,6 +225,7 @@ def initialize(
     self.balMinter = _balMinter
     self.rewardReceiver = _rewardReceiver
     self.rewardReceiverChangeable = _rewardReceiverChangeable
+    self.rewardDistributor = _rewardDistributor
 
 
 @external
@@ -968,12 +974,18 @@ def claimExternalRewards():
     if balBalance > 0:
         ERC20(self.balToken).transfer(self.rewardReceiver, balBalance)
 
+    # distributes rewards using rewardDistributor into current week
+    if self.rewardReceiver == self.rewardDistributor:
+        RewardDistributor(self.rewardDistributor).depositToken(self.balToken, 0)
+    
+
 @external
-def changeRewadReceiver(newReceiver: address):
+def changeRewardReceiver(newReceiver: address):
     """
     @notice Changes the reward receiver address
     @param newReceiver New address to set as the reward receiver
     """
-    assert (self.rewardReceiverChangeable), '!available' 
+    assert msg.sender == self.admin, '!admin'
+    assert (self.rewardReceiverChangeable), '!available'
     self.rewardReceiver = newReceiver
     log RewardReceiver(newReceiver)

@@ -21,6 +21,8 @@ import {
   SmartWalletChecker,
   LensReward,
   RewardFaucet,
+  BalancerToken,
+  BalancerMinter,
 } from "../typechain-types";
 
 let owner: Signer;
@@ -58,8 +60,8 @@ let launchpad: Launchpad;
 
 let lens: LensReward;
 
-let smartWalletChecker: SmartWalletWhitelist;
-let smartCheckerAllower: SmartWalletChecker;
+let balToken: BalancerToken;
+let balMinter: BalancerMinter;
 
 let DAY: number = 60 * 60 * 24;
 let WEEK: number = 60 * 60 * 24 * 7;
@@ -92,11 +94,11 @@ describe("Lock-cancel flow tests", function () {
     rewardFaucetFactory = await ethers.getContractFactory('RewardFaucet');
     rewardFaucetImpl = (await rewardFaucetFactory.deploy()) as RewardFaucet;
 
-    const smartCheckerFactory = await ethers.getContractFactory('SmartWalletWhitelist');
-    smartWalletChecker = (await smartCheckerFactory.deploy(creatorAddress)) as SmartWalletWhitelist;
+    const balFactory = await ethers.getContractFactory('BalancerToken');
+    balToken = (await balFactory.deploy()) as BalancerToken;
 
-    const smartCheckerAllowerFactory = await ethers.getContractFactory('SmartWalletChecker');
-    smartCheckerAllower = (await smartCheckerAllowerFactory.deploy()) as SmartWalletChecker;
+    const balMinterFactory = await ethers.getContractFactory('BalancerMinter');
+    balMinter = (await balMinterFactory.deploy(balToken.address)) as BalancerMinter;
 
     const lensFactory = await ethers.getContractFactory('LensReward');
     lens = (await lensFactory.deploy()) as LensReward;
@@ -152,7 +154,12 @@ describe("Lock-cancel flow tests", function () {
         user2Address,
         constants.AddressZero,
         constants.AddressZero,
-        maxLockTime
+        maxLockTime,
+        constants.AddressZero,
+        constants.AddressZero,
+        constants.AddressZero,
+        false,
+        constants.AddressZero,
       );
 
       const startTime = (await time.latest()) + WEEK * 3;
@@ -185,7 +192,9 @@ describe("Lock-cancel flow tests", function () {
       launchpad = (await launchpadFactory.deploy(
         votingEscrowImpl.address,
         rewardDistributorImpl.address,
-        rewardFaucetImpl.address
+        rewardFaucetImpl.address,
+        balToken.address,
+        balMinter.address
         )) as Launchpad;
     });
     
@@ -222,6 +231,7 @@ describe("Lock-cancel flow tests", function () {
         veSymbol,
         maxLockTime,
         rewardStartTime,
+        creatorAddress,
         creatorAddress,
         creatorAddress
       );
@@ -271,6 +281,20 @@ describe("Lock-cancel flow tests", function () {
           .to.equal(bptToken.address);
       });
 
+      it('Should return BAL properties of VotingEscrow', async () => {
+        expect(await votingEscrow.balMinter())
+          .to.equal(balMinter.address);
+
+        expect(await votingEscrow.balToken())
+          .to.equal(balToken.address);
+
+        expect(await votingEscrow.rewardReceiver())
+          .to.equal(creatorAddress);
+
+        expect(await votingEscrow.rewardReceiverChangeable())
+          .to.equal(true);
+      });
+
       it('Should return correct initial states for VotingEscrow unlocks', async () => {
         expect(await votingEscrow.early_unlock()).to.equal(false);
         expect(await votingEscrow.all_unlock()).to.equal(false);
@@ -301,9 +325,14 @@ describe("Lock-cancel flow tests", function () {
           'newNameFail',
           'newSymbolFail',
           creatorAddress,
+          constants.AddressZero,
+          constants.AddressZero,
+          maxLockTime,
+          balToken.address,
+          balMinter.address,
           creatorAddress,
-          creatorAddress,
-          maxLockTime
+          true,
+          rewardDistributor.address,
         ))
           .to.be.revertedWith('only once');
       });
