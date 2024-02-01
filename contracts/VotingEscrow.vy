@@ -43,6 +43,7 @@ interface ERC20:
     def symbol() -> String[32]: view
     def balanceOf(account: address) -> uint256: view
     def transfer(to: address, amount: uint256) -> bool: nonpayable
+    def approve(spender: address, amount: uint256) -> bool: nonpayable
     def transferFrom(spender: address, to: address, amount: uint256) -> bool: nonpayable
 
 
@@ -972,12 +973,13 @@ def claimExternalRewards():
     BalancerMinter(self.balMinter).mint(self.TOKEN)
     balBalance: uint256 = ERC20(self.balToken).balanceOf(self)
     if balBalance > 0:
-        ERC20(self.balToken).transfer(self.rewardReceiver, balBalance)
+        # distributes rewards using rewardDistributor into current week
+        if self.rewardReceiver == self.rewardDistributor:
+            assert ERC20(self.balToken).approve(self.rewardDistributor, balBalance, default_return_value=True)
+            RewardDistributor(self.rewardDistributor).depositToken(self.balToken, balBalance)
+        else:
+            assert ERC20(self.balToken).transfer(self.rewardReceiver, balBalance, default_return_value=True)
 
-    # distributes rewards using rewardDistributor into current week
-    if self.rewardReceiver == self.rewardDistributor:
-        RewardDistributor(self.rewardDistributor).depositToken(self.balToken, 0)
-    
 
 @external
 def changeRewardReceiver(newReceiver: address):
@@ -987,5 +989,7 @@ def changeRewardReceiver(newReceiver: address):
     """
     assert msg.sender == self.admin, '!admin'
     assert (self.rewardReceiverChangeable), '!available'
+    assert newReceiver != empty(address), '!empty'
+
     self.rewardReceiver = newReceiver
     log RewardReceiver(newReceiver)

@@ -91,7 +91,7 @@ def deploy(
     @param maxLockTime A constraint for the maximum lock time in the new VotingEscrow contract
     @param rewardDistributorStartTime The start time for reward distribution
     @param admin_unlock_all Admin address to enable unlock-all feature in VotingEscrow (zero-address to disable forever)
-    @param admin_early_unlock Admin address to enable eraly-unlock feature in VotingEscrow (zero-address to disable forever)
+    @param admin_early_unlock Admin address to enable early-unlock feature in VotingEscrow (zero-address to disable forever)
     @param rewardReceiver The receiver address of claimed BAL-token rewards
     """
     assert(balToken != tokenBptAddr), '!bal'
