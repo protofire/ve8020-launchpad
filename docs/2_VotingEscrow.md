@@ -113,6 +113,21 @@ function set_all_unlock() external;
 Deactivates VotingEscrow and allows users to unlock their locks before lock-end. New deposits will no longer be accepted.
 
 
+## External Rewards (BAL Claim)  
+### Claim External Rewards  
+The contract provides functionality for claiming rewards that can be accrued by holders of gauge tokens. By default, rewards are distributed to the RewardDistributor contract. The function `claimExternalRewards()` is used to claim additional rewards.  
+```sh
+function claimExternalRewards() external;
+```  
+
+### Reward Receiver Update
+Additionally, the contract administrator can change the address eligible to receive additional rewards (`rewardReceiver`). Changing such an address is only possible if an address was not set as zero-address (`address(0)`) as the rewardReceiver when creating the ve-system. To change the address of the recipient of additional rewards (rewardReceiver), use the function `changeRewardReceiver(address newReceiver)`:
+```sh
+function changeRewardReceiver(address newReceiver) external;
+```  
+Parameters:  
+`newReceiver` - New address to set as the reward (BAL) receiver  
+
 
 ## Admin functions
 
