@@ -21,6 +21,8 @@ import {
   SmartWalletChecker,
   LensReward,
   RewardFaucet,
+  BalancerToken,
+  BalancerMinter,
 } from "../typechain-types";
 
 let owner: Signer;
@@ -59,8 +61,8 @@ let launchpad: Launchpad;
 
 let lens: LensReward;
 
-let smartWalletChecker: SmartWalletWhitelist;
-let smartCheckerAllower: SmartWalletChecker;
+let balToken: BalancerToken;
+let balMinter: BalancerMinter;
 
 let DAY: number = 60 * 60 * 24;
 let WEEK: number = 60 * 60 * 24 * 7;
@@ -93,11 +95,12 @@ describe("RewardFaucet tests", function () {
 
     rewardFaucetFactory = await ethers.getContractFactory('RewardFaucet');
     rewardFaucetImpl = (await rewardFaucetFactory.deploy()) as RewardFaucet;
-    const smartCheckerFactory = await ethers.getContractFactory('SmartWalletWhitelist');
-    smartWalletChecker = (await smartCheckerFactory.deploy(creatorAddress)) as SmartWalletWhitelist;
 
-    const smartCheckerAllowerFactory = await ethers.getContractFactory('SmartWalletChecker');
-    smartCheckerAllower = (await smartCheckerAllowerFactory.deploy()) as SmartWalletChecker;
+    const balFactory = await ethers.getContractFactory('BalancerToken');
+    balToken = (await balFactory.deploy()) as BalancerToken;
+
+    const balMinterFactory = await ethers.getContractFactory('BalancerMinter');
+    balMinter = (await balMinterFactory.deploy(balToken.address)) as BalancerMinter;
 
     const lensFactory = await ethers.getContractFactory('LensReward');
     lens = (await lensFactory.deploy()) as LensReward;
@@ -151,7 +154,12 @@ describe("RewardFaucet tests", function () {
         user2Address,
         constants.AddressZero,
         constants.AddressZero,
-        maxLockTime
+        maxLockTime,
+        constants.AddressZero,
+        constants.AddressZero,
+        constants.AddressZero,
+        false,
+        constants.AddressZero,
       );
 
       const startTime = (await time.latest()) + WEEK * 3;
@@ -180,7 +188,9 @@ describe("RewardFaucet tests", function () {
       launchpad = (await launchpadFactory.deploy(
         votingEscrowImpl.address,
         rewardDistributorImpl.address,
-        rewardFaucetImpl.address
+        rewardFaucetImpl.address,
+        balToken.address,
+        balMinter.address
         )) as Launchpad;
     });
     
@@ -197,6 +207,14 @@ describe("RewardFaucet tests", function () {
     it('Should set correct RewardFaucet implementation of launchpad', async () => {
       expect(await launchpad.rewardFaucet())
         .to.equal(rewardFaucetImpl.address);
+    });
+
+    it('Should set correct balToken and BalancerMinter addresses', async () => {
+      expect(await launchpad.balToken())
+        .to.equal(balToken.address);
+
+      expect(await launchpad.balMinter())
+        .to.equal(balMinter.address);
     });
   });
 
@@ -223,7 +241,8 @@ describe("RewardFaucet tests", function () {
         maxLockTime,
         rewardStartTime,
         constants.AddressZero,
-        constants.AddressZero
+        constants.AddressZero,
+        creatorAddress,
       );
       txReceipt = await txResult.wait();
     });

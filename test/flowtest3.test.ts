@@ -21,6 +21,8 @@ import {
   SmartWalletChecker,
   LensReward,
   RewardFaucet,
+  BalancerToken,
+  BalancerMinter,
 } from "../typechain-types";
 
 let owner: Signer;
@@ -59,8 +61,8 @@ let launchpad: Launchpad;
 
 let lens: LensReward;
 
-let smartWalletChecker: SmartWalletWhitelist;
-let smartCheckerAllower: SmartWalletChecker;
+let balToken: BalancerToken;
+let balMinter: BalancerMinter;
 
 let DAY: number = 60 * 60 * 24;
 let WEEK: number = 60 * 60 * 24 * 7;
@@ -93,11 +95,12 @@ describe("Launchpad flow test 3 with multiple rewards", function () {
 
     rewardFaucetFactory = await ethers.getContractFactory('RewardFaucet');
     rewardFaucetImpl = (await rewardFaucetFactory.deploy()) as RewardFaucet;
-    const smartCheckerFactory = await ethers.getContractFactory('SmartWalletWhitelist');
-    smartWalletChecker = (await smartCheckerFactory.deploy(creatorAddress)) as SmartWalletWhitelist;
 
-    const smartCheckerAllowerFactory = await ethers.getContractFactory('SmartWalletChecker');
-    smartCheckerAllower = (await smartCheckerAllowerFactory.deploy()) as SmartWalletChecker;
+    const balFactory = await ethers.getContractFactory('BalancerToken');
+    balToken = (await balFactory.deploy()) as BalancerToken;
+
+    const balMinterFactory = await ethers.getContractFactory('BalancerMinter');
+    balMinter = (await balMinterFactory.deploy(balToken.address)) as BalancerMinter;
 
     const lensFactory = await ethers.getContractFactory('LensReward');
     lens = (await lensFactory.deploy()) as LensReward;
@@ -159,7 +162,12 @@ describe("Launchpad flow test 3 with multiple rewards", function () {
         user2Address,
         constants.AddressZero,
         constants.AddressZero,
-        maxLockTime
+        maxLockTime,
+        constants.AddressZero,
+        constants.AddressZero,
+        constants.AddressZero,
+        false,
+        constants.AddressZero,
       );
 
       const startTime = (await time.latest()) + WEEK * 3;
@@ -188,7 +196,9 @@ describe("Launchpad flow test 3 with multiple rewards", function () {
       launchpad = (await launchpadFactory.deploy(
         votingEscrowImpl.address,
         rewardDistributorImpl.address,
-        rewardFaucetImpl.address
+        rewardFaucetImpl.address,
+        balToken.address,
+        balMinter.address
         )) as Launchpad;
     });
     
@@ -200,6 +210,14 @@ describe("Launchpad flow test 3 with multiple rewards", function () {
     it('Should set correct RD implementation of launchpad', async () => {
       expect(await launchpad.rewardDistributor())
         .to.equal(rewardDistributorImpl.address);
+    });
+
+    it('Should set correct balToken and BalancerMinter addresses', async () => {
+      expect(await launchpad.balToken())
+        .to.equal(balToken.address);
+
+      expect(await launchpad.balMinter())
+        .to.equal(balMinter.address);
     });
   });
 
@@ -224,6 +242,7 @@ describe("Launchpad flow test 3 with multiple rewards", function () {
         veSymbol,
         maxLockTime,
         rewardStartTime,
+        creatorAddress,
         creatorAddress,
         creatorAddress
       );
@@ -273,6 +292,20 @@ describe("Launchpad flow test 3 with multiple rewards", function () {
           .to.equal(bptToken.address);
       });
 
+      it('Should return BAL properties of VotingEscrow', async () => {
+        expect(await votingEscrow.balMinter())
+          .to.equal(balMinter.address);
+
+        expect(await votingEscrow.balToken())
+          .to.equal(balToken.address);
+
+        expect(await votingEscrow.rewardReceiver())
+          .to.equal(creatorAddress);
+
+        expect(await votingEscrow.rewardReceiverChangeable())
+          .to.equal(true);
+      });
+
       it('Should return non-zero initial point_history', async () => {
         const firstPH = await votingEscrow.point_history(0);
         expect(firstPH.blk).to.be.gt(3);
@@ -295,7 +328,12 @@ describe("Launchpad flow test 3 with multiple rewards", function () {
           creatorAddress,
           constants.AddressZero,
           constants.AddressZero,
-          maxLockTime
+          maxLockTime,
+          balToken.address,
+          balMinter.address,
+          creatorAddress,
+          true,
+          rewardDistributor.address
         ))
           .to.be.revertedWith('only once');
       });

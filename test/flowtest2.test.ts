@@ -21,6 +21,8 @@ import {
   SmartWalletChecker,
   LensReward,
   RewardFaucet,
+  BalancerToken,
+  BalancerMinter,
 } from "../typechain-types";
 
 let owner: Signer;
@@ -58,12 +60,12 @@ let launchpad: Launchpad;
 
 let lens: LensReward;
 
-let smartWalletChecker: SmartWalletWhitelist;
-let smartCheckerAllower: SmartWalletChecker;
+let balToken: BalancerToken;
+let balMinter: BalancerMinter;
 
 let DAY: number = 60 * 60 * 24;
 let WEEK: number = 60 * 60 * 24 * 7;
-
+const BAL_MINTER_MULTIPLIER = 10;
 
 describe("Launchpad flow test 2 with multiple users", function () {
 
@@ -92,11 +94,11 @@ describe("Launchpad flow test 2 with multiple users", function () {
     rewardFaucetFactory = await ethers.getContractFactory('RewardFaucet');
     rewardFaucetImpl = (await rewardFaucetFactory.deploy()) as RewardFaucet;
 
-    const smartCheckerFactory = await ethers.getContractFactory('SmartWalletWhitelist');
-    smartWalletChecker = (await smartCheckerFactory.deploy(creatorAddress)) as SmartWalletWhitelist;
+    const balFactory = await ethers.getContractFactory('BalancerToken');
+    balToken = (await balFactory.deploy()) as BalancerToken;
 
-    const smartCheckerAllowerFactory = await ethers.getContractFactory('SmartWalletChecker');
-    smartCheckerAllower = (await smartCheckerAllowerFactory.deploy()) as SmartWalletChecker;
+    const balMinterFactory = await ethers.getContractFactory('BalancerMinter');
+    balMinter = (await balMinterFactory.deploy(balToken.address)) as BalancerMinter;
 
     const lensFactory = await ethers.getContractFactory('LensReward');
     lens = (await lensFactory.deploy()) as LensReward;
@@ -155,7 +157,12 @@ describe("Launchpad flow test 2 with multiple users", function () {
         user2Address,
         constants.AddressZero,
         constants.AddressZero,
-        maxLockTime
+        maxLockTime,
+        constants.AddressZero,
+        constants.AddressZero,
+        constants.AddressZero,
+        false,
+        constants.AddressZero,
       );
 
       const startTime = (await time.latest()) + WEEK * 3;
@@ -188,7 +195,9 @@ describe("Launchpad flow test 2 with multiple users", function () {
       launchpad = (await launchpadFactory.deploy(
         votingEscrowImpl.address,
         rewardDistributorImpl.address,
-        rewardFaucetImpl.address
+        rewardFaucetImpl.address,
+        balToken.address,
+        balMinter.address
         )) as Launchpad;
     });
     
@@ -200,6 +209,14 @@ describe("Launchpad flow test 2 with multiple users", function () {
     it('Should set correct RD implementation of launchpad', async () => {
       expect(await launchpad.rewardDistributor())
         .to.equal(rewardDistributorImpl.address);
+    });
+
+    it('Should set correct balToken and BalancerMinter addresses', async () => {
+      expect(await launchpad.balToken())
+        .to.equal(balToken.address);
+
+      expect(await launchpad.balMinter())
+        .to.equal(balMinter.address);
     });
   });
 
@@ -225,7 +242,8 @@ describe("Launchpad flow test 2 with multiple users", function () {
         maxLockTime,
         rewardStartTime,
         creatorAddress,
-        creatorAddress
+        creatorAddress,
+        constants.AddressZero
       );
       txReceipt = await txResult.wait();
     });
@@ -273,6 +291,25 @@ describe("Launchpad flow test 2 with multiple users", function () {
           .to.equal(bptToken.address);
       });
 
+      it('Should return BAL properties of VotingEscrow', async () => {
+        expect(await votingEscrow.balMinter())
+          .to.equal(balMinter.address);
+
+        expect(await votingEscrow.balToken())
+          .to.equal(balToken.address);
+
+        expect(await votingEscrow.rewardReceiver())
+          .to.equal(rewardDistributor.address);
+
+        expect(await votingEscrow.rewardReceiverChangeable())
+          .to.equal(false);
+      });
+
+      it('Should not be possible to change RewardReceiver when this option is nnot available', async () => {
+        await expect(votingEscrow.connect(creator).changeRewardReceiver(user2Address))
+          .to.be.revertedWith('!available');
+      });
+
       it('Should return non-zero initial point_history', async () => {
         const firstPH = await votingEscrow.point_history(0);
         expect(firstPH.blk).to.be.gt(3);
@@ -295,7 +332,12 @@ describe("Launchpad flow test 2 with multiple users", function () {
           creatorAddress,
           constants.AddressZero,
           constants.AddressZero,
-          maxLockTime
+          maxLockTime,
+          balToken.address,
+          balMinter.address,
+          creatorAddress,
+          true,
+          rewardDistributor.address
         ))
           .to.be.revertedWith('only once');
       });
@@ -339,15 +381,17 @@ describe("Launchpad flow test 2 with multiple users", function () {
 
       describe('Adding reward tokens', function () {
         let startRewardTime: number;
+        let totalLocked: BigNumber;
 
         before(async() => {
+          totalLocked = await votingEscrow.supply();
           const depositAmount = totalRewardAmount.div(2);
 
           await rewardToken.connect(creator)
             .approve(rewardDistributor.address, constants.MaxUint256);
 
           await rewardDistributor.connect(creator)
-            .addAllowedRewardTokens([rewardToken.address]);
+            .addAllowedRewardTokens([rewardToken.address, balToken.address]);
           
           startRewardTime = (await rewardDistributor.getTimeCursor()).toNumber();
 
@@ -355,12 +399,19 @@ describe("Launchpad flow test 2 with multiple users", function () {
 
           await rewardDistributor.connect(creator)
             .depositToken(rewardToken.address, depositAmount);
+          
+          await votingEscrow.connect(user2).claimExternalRewards();
         });
 
         it('Should be able to deposit rewards into rewardDistributor', async () => {
 
           expect(await rewardToken.balanceOf(rewardDistributor.address))
             .to.equal(totalRewardAmount.div(2));
+        });
+
+        it('Should provide external BAL rewards into rewardDistributor', async () => {
+          expect(await balToken.balanceOf(rewardDistributor.address))
+            .to.equal(totalLocked.mul(BAL_MINTER_MULTIPLIER));
         });
 
         describe('Check available rewards after first WEEK past', function () {
@@ -390,6 +441,27 @@ describe("Launchpad flow test 2 with multiple users", function () {
             expect(user1rewards.add(user2rewards)).to.equal(totalRewardAmount.div(2));
           });
 
+          it('Should calculate correct claimable amounts of BAL using lens', async () => {
+
+            const user1rewards = (
+              await lens.callStatic.getUserClaimableReward(
+                rewardDistributor.address,
+                user1Address,
+                balToken.address
+                )
+              ).claimableAmount;
+
+            const user2rewards = (
+              await lens.callStatic.getUserClaimableReward(
+                rewardDistributor.address,
+                user2Address,
+                balToken.address
+                )
+              ).claimableAmount;
+
+            expect(user1rewards.add(user2rewards)).to.equal(totalLocked.mul(BAL_MINTER_MULTIPLIER));
+          });
+
           describe('Rewards claiming', function () {
             let user1RewardBefore: BigNumber;
             let user2RewardBefore: BigNumber;
@@ -411,6 +483,30 @@ describe("Launchpad flow test 2 with multiple users", function () {
               expect(user2RewardAfter).to.be.gt(user2RewardBefore).to.be.gt(constants.Two);
 
               expect(user1RewardAfter.add(user2RewardAfter)).to.equal(totalRewardAmount.div(2));
+            });
+          });
+
+          describe('BAL Rewards claiming', function () {
+            let user1BalBefore: BigNumber;
+            let user2BalBefore: BigNumber;
+
+            before(async () => {
+              user1BalBefore = await balToken.balanceOf(user1Address);
+              user2BalBefore = await balToken.balanceOf(user2Address);
+
+              await rewardDistributor.connect(user1)
+                .claimToken(user1Address, balToken.address);
+              await rewardDistributor.connect(user2)
+                .claimToken(user2Address, balToken.address);
+            });
+
+            it('Should increase reward balance after claim', async () => {
+              const user1BalAfter = await balToken.balanceOf(user1Address);
+              const user2BalAfter = await balToken.balanceOf(user2Address);
+              expect(user1BalAfter).to.be.gt(user1BalBefore).to.be.gt(constants.Two);
+              expect(user2BalAfter).to.be.gt(user2BalBefore).to.be.gt(constants.Two);
+
+              expect(user1BalAfter.add(user2BalAfter)).to.equal(totalLocked.mul(BAL_MINTER_MULTIPLIER));
             });
           });
 
