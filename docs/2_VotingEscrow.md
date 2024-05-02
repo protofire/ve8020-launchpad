@@ -55,6 +55,20 @@ Extend the unlock time for `msg.sender` to `_unlock_time`
 Parameters:  
 `_unlock_time` - new epoch time for unlocking
 
+### deposit_for
+The contract allows increasing the lock amount of another account. In other words, anyone can make a deposit for someone else who already has an active lock. However, it is not possible to increase the unlock time or make a deposit for a new user who does not yet have a lock.  
+This can be used, for example:
+- in cases where there are multiple sources of tokens for locking, and ultimately they can be consolidated into one account to increase the VotingPower of a specific address;  
+- in cases where some users can unite their resources into a single pool (smart contract) that will manage tokens for locking.  
+
+```sh
+function deposit_for(address _addr, uint256 _value) external;
+```
+Deposits `_value` tokens for `_addr` and add to the lock 
+Parameters:  
+`_addr` - User's wallet address  
+`_value` - Amount to add to user's lock  
+
 ### withdraw
 ```sh
 function withdraw() external;
